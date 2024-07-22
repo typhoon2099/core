@@ -1,4 +1,5 @@
 """Switch platform for Sensibo integration."""
+
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
@@ -12,10 +13,11 @@ from homeassistant.components.switch import (
     SwitchEntity,
     SwitchEntityDescription,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from . import SensiboConfigEntry
 from .const import DOMAIN
 from .coordinator import SensiboDataUpdateCoordinator
 from .entity import SensiboDeviceBaseEntity, async_handle_api_call
@@ -23,9 +25,9 @@ from .entity import SensiboDeviceBaseEntity, async_handle_api_call
 PARALLEL_UPDATES = 0
 
 
-@dataclass
-class DeviceBaseEntityDescriptionMixin:
-    """Mixin for required Sensibo Device description keys."""
+@dataclass(frozen=True, kw_only=True)
+class SensiboDeviceSwitchEntityDescription(SwitchEntityDescription):
+    """Describes Sensibo Switch entity."""
 
     value_fn: Callable[[SensiboDevice], bool | None]
     extra_fn: Callable[[SensiboDevice], dict[str, str | bool | None]] | None
@@ -34,32 +36,34 @@ class DeviceBaseEntityDescriptionMixin:
     data_key: str
 
 
-@dataclass
-class SensiboDeviceSwitchEntityDescription(
-    SwitchEntityDescription, DeviceBaseEntityDescriptionMixin
-):
-    """Describes Sensibo Switch entity."""
-
-
 DEVICE_SWITCH_TYPES: tuple[SensiboDeviceSwitchEntityDescription, ...] = (
     SensiboDeviceSwitchEntityDescription(
         key="timer_on_switch",
+        translation_key="timer_on_switch",
         device_class=SwitchDeviceClass.SWITCH,
-        name="Timer",
-        icon="mdi:timer",
         value_fn=lambda data: data.timer_on,
         extra_fn=lambda data: {"id": data.timer_id, "turn_on": data.timer_state_on},
         command_on="async_turn_on_timer",
         command_off="async_turn_off_timer",
         data_key="timer_on",
     ),
+    SensiboDeviceSwitchEntityDescription(
+        key="climate_react_switch",
+        translation_key="climate_react_switch",
+        device_class=SwitchDeviceClass.SWITCH,
+        value_fn=lambda data: data.smart_on,
+        extra_fn=lambda data: {"type": data.smart_type},
+        command_on="async_turn_on_off_smart",
+        command_off="async_turn_on_off_smart",
+        data_key="smart_on",
+    ),
 )
 
 PURE_SWITCH_TYPES: tuple[SensiboDeviceSwitchEntityDescription, ...] = (
     SensiboDeviceSwitchEntityDescription(
         key="pure_boost_switch",
+        translation_key="pure_boost_switch",
         device_class=SwitchDeviceClass.SWITCH,
-        name="Pure Boost",
         value_fn=lambda data: data.pure_boost_enabled,
         extra_fn=None,
         command_on="async_turn_on_off_pure_boost",
@@ -72,11 +76,13 @@ DESCRIPTION_BY_MODELS = {"pure": PURE_SWITCH_TYPES}
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: SensiboConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Sensibo Switch platform."""
 
-    coordinator: SensiboDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
 
     async_add_entities(
         SensiboDeviceSwitch(coordinator, device_id, description)
@@ -126,7 +132,7 @@ class SensiboDeviceSwitch(SensiboDeviceBaseEntity, SwitchEntity):
         await func(
             self,
             key=self.entity_description.data_key,
-            value=True,
+            value=False,
         )
 
     @property
@@ -137,10 +143,9 @@ class SensiboDeviceSwitch(SensiboDeviceBaseEntity, SwitchEntity):
         return None
 
     @async_handle_api_call
-    async def async_turn_on_timer(self, key: str, value: Any) -> bool:
+    async def async_turn_on_timer(self, key: str, value: bool) -> bool:
         """Make service call to api for setting timer."""
-        result = {}
-        new_state = bool(self.device_data.ac_states["on"] is False)
+        new_state = not self.device_data.device_on
         data = {
             "minutesFromNow": 60,
             "acState": {**self.device_data.ac_states, "on": new_state},
@@ -149,18 +154,15 @@ class SensiboDeviceSwitch(SensiboDeviceBaseEntity, SwitchEntity):
         return bool(result.get("status") == "success")
 
     @async_handle_api_call
-    async def async_turn_off_timer(self, key: str, value: Any) -> bool:
+    async def async_turn_off_timer(self, key: str, value: bool) -> bool:
         """Make service call to api for deleting timer."""
-        result = {}
         result = await self._client.async_del_timer(self._device_id)
         return bool(result.get("status") == "success")
 
     @async_handle_api_call
-    async def async_turn_on_off_pure_boost(self, key: str, value: Any) -> bool:
+    async def async_turn_on_off_pure_boost(self, key: str, value: bool) -> bool:
         """Make service call to api for setting Pure Boost."""
-        result = {}
-        new_state = bool(self.device_data.pure_boost_enabled is False)
-        data: dict[str, Any] = {"enabled": new_state}
+        data: dict[str, Any] = {"enabled": value}
         if self.device_data.pure_measure_integration is None:
             data["sensitivity"] = "N"
             data["measurementsIntegration"] = True
@@ -168,4 +170,16 @@ class SensiboDeviceSwitch(SensiboDeviceBaseEntity, SwitchEntity):
             data["geoIntegration"] = False
             data["primeIntegration"] = False
         result = await self._client.async_set_pureboost(self._device_id, data)
+        return bool(result.get("status") == "success")
+
+    @async_handle_api_call
+    async def async_turn_on_off_smart(self, key: str, value: bool) -> bool:
+        """Make service call to api for setting Climate React."""
+        if self.device_data.smart_type is None:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="climate_react_not_available",
+            )
+        data: dict[str, Any] = {"enabled": value}
+        result = await self._client.async_enable_climate_react(self._device_id, data)
         return bool(result.get("status") == "success")

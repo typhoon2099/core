@@ -1,4 +1,5 @@
 """Support for Tellstick lights using Tellstick Net."""
+
 import logging
 from typing import Any
 
@@ -37,6 +38,7 @@ async def async_setup_entry(
 class TelldusLiveLight(TelldusLiveEntity, LightEntity):
     """Representation of a Tellstick Net light."""
 
+    _attr_name = None
     _attr_color_mode = ColorMode.BRIGHTNESS
     _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
 
@@ -48,7 +50,7 @@ class TelldusLiveLight(TelldusLiveEntity, LightEntity):
     def changed(self):
         """Define a property of the device that might have changed."""
         self._last_brightness = self.brightness
-        self._update_callback()
+        self.schedule_update_ha_state()
 
     @property
     def brightness(self):

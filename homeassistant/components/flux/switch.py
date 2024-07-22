@@ -1,8 +1,8 @@
-"""
-Flux for Home-Assistant.
+"""Flux for Home-Assistant.
 
 The idea was taken from https://github.com/KpaBap/hue-flux/
 """
+
 from __future__ import annotations
 
 import datetime
@@ -50,6 +50,8 @@ from homeassistant.util.dt import as_local, utcnow as dt_utcnow
 
 _LOGGER = logging.getLogger(__name__)
 
+ATTR_UNIQUE_ID = "unique_id"
+
 CONF_START_TIME = "start_time"
 CONF_STOP_TIME = "stop_time"
 CONF_START_CT = "start_colortemp"
@@ -88,6 +90,7 @@ PLATFORM_SCHEMA = vol.Schema(
         ),
         vol.Optional(CONF_INTERVAL, default=30): cv.positive_int,
         vol.Optional(ATTR_TRANSITION, default=30): VALID_TRANSITION,
+        vol.Optional(ATTR_UNIQUE_ID): cv.string,
     }
 )
 
@@ -151,6 +154,7 @@ async def async_setup_platform(
     mode = config.get(CONF_MODE)
     interval = config.get(CONF_INTERVAL)
     transition = config.get(ATTR_TRANSITION)
+    unique_id = config.get(ATTR_UNIQUE_ID)
     flux = FluxSwitch(
         name,
         hass,
@@ -165,6 +169,7 @@ async def async_setup_platform(
         mode,
         interval,
         transition,
+        unique_id,
     )
     async_add_entities([flux])
 
@@ -194,6 +199,7 @@ class FluxSwitch(SwitchEntity, RestoreEntity):
         mode,
         interval,
         transition,
+        unique_id,
     ):
         """Initialize the Flux switch."""
         self._name = name
@@ -209,6 +215,7 @@ class FluxSwitch(SwitchEntity, RestoreEntity):
         self._mode = mode
         self._interval = interval
         self._transition = transition
+        self._attr_unique_id = unique_id
         self.unsub_tracker = None
 
     @property
@@ -226,6 +233,12 @@ class FluxSwitch(SwitchEntity, RestoreEntity):
         last_state = await self.async_get_last_state()
         if last_state and last_state.state == STATE_ON:
             await self.async_turn_on()
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Run when entity will be removed from hass."""
+        if self.unsub_tracker:
+            self.unsub_tracker()
+        return await super().async_will_remove_from_hass()
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on flux."""
@@ -316,8 +329,10 @@ class FluxSwitch(SwitchEntity, RestoreEntity):
                 self.hass, self._lights, x_val, y_val, brightness, self._transition
             )
             _LOGGER.debug(
-                "Lights updated to x:%s y:%s brightness:%s, %s%% "
-                "of %s cycle complete at %s",
+                (
+                    "Lights updated to x:%s y:%s brightness:%s, %s%% "
+                    "of %s cycle complete at %s"
+                ),
                 x_val,
                 y_val,
                 brightness,
@@ -341,8 +356,10 @@ class FluxSwitch(SwitchEntity, RestoreEntity):
                 self.hass, self._lights, mired, brightness, self._transition
             )
             _LOGGER.debug(
-                "Lights updated to mired:%s brightness:%s, %s%% "
-                "of %s cycle complete at %s",
+                (
+                    "Lights updated to mired:%s brightness:%s, %s%% "
+                    "of %s cycle complete at %s"
+                ),
                 mired,
                 brightness,
                 round(percentage_complete * 100),

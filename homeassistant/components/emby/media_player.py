@@ -1,4 +1,5 @@
 """Support to interface with the Emby API."""
+
 from __future__ import annotations
 
 import logging
@@ -7,7 +8,7 @@ from pyemby import EmbyServer
 import voluptuous as vol
 
 from homeassistant.components.media_player import (
-    PLATFORM_SCHEMA,
+    PLATFORM_SCHEMA as MEDIA_PLAYER_PLATFORM_SCHEMA,
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
     MediaPlayerState,
@@ -46,7 +47,7 @@ SUPPORT_EMBY = (
     | MediaPlayerEntityFeature.PLAY
 )
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+PLATFORM_SCHEMA = MEDIA_PLAYER_PLATFORM_SCHEMA.extend(
     {
         vol.Required(CONF_API_KEY): cv.string,
         vol.Optional(CONF_HOST, default=DEFAULT_HOST): cv.string,
@@ -236,8 +237,7 @@ class EmbyDevice(MediaPlayerEntity):
 
     @property
     def media_position_updated_at(self):
-        """
-        When was the position of the current playing media valid.
+        """When was the position of the current playing media valid.
 
         Returns value from homeassistant.util.dt.utcnow().
         """
@@ -284,11 +284,11 @@ class EmbyDevice(MediaPlayerEntity):
         return self.device.media_album_artist
 
     @property
-    def supported_features(self):
+    def supported_features(self) -> MediaPlayerEntityFeature:
         """Flag media player features that are supported."""
         if self.supports_remote_control:
             return SUPPORT_EMBY
-        return 0
+        return MediaPlayerEntityFeature(0)
 
     async def async_media_play(self) -> None:
         """Play media."""

@@ -1,9 +1,14 @@
 """Fan support for switch entities."""
+
 from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.fan import FanEntity
+from homeassistant.components.fan import (
+    DOMAIN as FAN_DOMAIN,
+    FanEntity,
+    FanEntityFeature,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ENTITY_ID
 from homeassistant.core import HomeAssistant
@@ -23,18 +28,15 @@ async def async_setup_entry(
     entity_id = er.async_validate_entity_id(
         registry, config_entry.options[CONF_ENTITY_ID]
     )
-    wrapped_switch = registry.async_get(entity_id)
-    device_id = wrapped_switch.device_id if wrapped_switch else None
-    entity_category = wrapped_switch.entity_category if wrapped_switch else None
 
     async_add_entities(
         [
             FanSwitch(
+                hass,
                 config_entry.title,
+                FAN_DOMAIN,
                 entity_id,
                 config_entry.entry_id,
-                device_id,
-                entity_category,
             )
         ]
     )
@@ -42,6 +44,9 @@ async def async_setup_entry(
 
 class FanSwitch(BaseToggleEntity, FanEntity):
     """Represents a Switch as a Fan."""
+
+    _attr_supported_features = FanEntityFeature.TURN_OFF | FanEntityFeature.TURN_ON
+    _enable_turn_on_off_backwards_compatibility = False
 
     @property
     def is_on(self) -> bool | None:

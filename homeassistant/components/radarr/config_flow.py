@@ -1,4 +1,5 @@
 """Config flow for Radarr."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -10,32 +11,22 @@ from aiopyarr.models.host_configuration import PyArrHostConfiguration
 from aiopyarr.radarr_client import RadarrClient
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigEntry, ConfigFlow
-from homeassistant.const import (
-    CONF_API_KEY,
-    CONF_HOST,
-    CONF_PORT,
-    CONF_SSL,
-    CONF_URL,
-    CONF_VERIFY_SSL,
-)
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.const import CONF_API_KEY, CONF_URL, CONF_VERIFY_SSL
 from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import DEFAULT_NAME, DEFAULT_URL, DOMAIN, LOGGER
+from . import RadarrConfigEntry
+from .const import DEFAULT_NAME, DEFAULT_URL, DOMAIN
 
 
 class RadarrConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Radarr."""
 
     VERSION = 1
+    entry: RadarrConfigEntry | None = None
 
-    def __init__(self) -> None:
-        """Initialize the flow."""
-        self.entry: ConfigEntry | None = None
-
-    async def async_step_reauth(self, _: Mapping[str, Any]) -> FlowResult:
+    async def async_step_reauth(self, _: Mapping[str, Any]) -> ConfigFlowResult:
         """Handle configuration by re-auth."""
         self.entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
 
@@ -43,7 +34,7 @@ class RadarrConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_reauth_confirm(
         self, user_input: dict[str, str] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Confirm reauth dialog."""
         if user_input is not None:
             return await self.async_step_user()
@@ -53,7 +44,7 @@ class RadarrConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle a flow initiated by the user."""
         errors = {}
 
@@ -104,28 +95,6 @@ class RadarrConfigFlow(ConfigFlow, domain=DOMAIN):
                 }
             ),
             errors=errors,
-        )
-
-    async def async_step_import(self, config: dict[str, Any]) -> FlowResult:
-        """Import a config entry from configuration.yaml."""
-        for entry in self._async_current_entries():
-            if entry.data[CONF_API_KEY] == config[CONF_API_KEY]:
-                _part = config[CONF_API_KEY][0:4]
-                _msg = f"Radarr yaml config with partial key {_part} has been imported. Please remove it"
-                LOGGER.warning(_msg)
-                return self.async_abort(reason="already_configured")
-        proto = "https" if config[CONF_SSL] else "http"
-        host_port = f"{config[CONF_HOST]}:{config[CONF_PORT]}"
-        path = ""
-        if config["urlbase"].rstrip("/") not in ("", "/", "/api"):
-            path = config["urlbase"].rstrip("/")
-        return self.async_create_entry(
-            title=DEFAULT_NAME,
-            data={
-                CONF_URL: f"{proto}://{host_port}{path}",
-                CONF_API_KEY: config[CONF_API_KEY],
-                CONF_VERIFY_SSL: False,
-            },
         )
 
 

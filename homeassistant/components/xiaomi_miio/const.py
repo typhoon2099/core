@@ -1,9 +1,16 @@
 """Constants for the Xiaomi Miio component."""
-from miio.vacuum import (
+
+from miio.integrations.vacuum.roborock.vacuum import (
+    ROCKROBO_E2,
+    ROCKROBO_S4,
+    ROCKROBO_S4_MAX,
     ROCKROBO_S5,
+    ROCKROBO_S5_MAX,
     ROCKROBO_S6,
     ROCKROBO_S6_MAXV,
+    ROCKROBO_S6_PURE,
     ROCKROBO_S7,
+    ROCKROBO_S7_MAXV,
     ROCKROBO_V1,
 )
 
@@ -12,8 +19,6 @@ DOMAIN = "xiaomi_miio"
 # Config flow
 CONF_FLOW_TYPE = "config_flow_device"
 CONF_GATEWAY = "gateway"
-CONF_DEVICE = "device"
-CONF_MAC = "mac"
 CONF_CLOUD_USERNAME = "cloud_username"
 CONF_CLOUD_PASSWORD = "cloud_password"
 CONF_CLOUD_COUNTRY = "cloud_country"
@@ -48,18 +53,22 @@ class SetupException(Exception):
 
 # Fan Models
 MODEL_AIRPURIFIER_4 = "zhimi.airp.mb5"
+MODEL_AIRPURIFIER_4_LITE_RMA1 = "zhimi.airpurifier.rma1"
+MODEL_AIRPURIFIER_4_LITE_RMB1 = "zhimi.airp.rmb1"
 MODEL_AIRPURIFIER_4_PRO = "zhimi.airp.vb4"
 MODEL_AIRPURIFIER_2H = "zhimi.airpurifier.mc2"
 MODEL_AIRPURIFIER_2S = "zhimi.airpurifier.mc1"
 MODEL_AIRPURIFIER_3 = "zhimi.airpurifier.ma4"
 MODEL_AIRPURIFIER_3C = "zhimi.airpurifier.mb4"
 MODEL_AIRPURIFIER_3H = "zhimi.airpurifier.mb3"
+MODEL_AIRPURIFIER_COMPACT = "xiaomi.airp.cpa4"
 MODEL_AIRPURIFIER_M1 = "zhimi.airpurifier.m1"
 MODEL_AIRPURIFIER_M2 = "zhimi.airpurifier.m2"
 MODEL_AIRPURIFIER_MA1 = "zhimi.airpurifier.ma1"
 MODEL_AIRPURIFIER_MA2 = "zhimi.airpurifier.ma2"
 MODEL_AIRPURIFIER_PRO = "zhimi.airpurifier.v6"
 MODEL_AIRPURIFIER_PROH = "zhimi.airpurifier.va1"
+MODEL_AIRPURIFIER_PROH_EU = "zhimi.airpurifier.vb2"
 MODEL_AIRPURIFIER_PRO_V7 = "zhimi.airpurifier.v7"
 MODEL_AIRPURIFIER_SA1 = "zhimi.airpurifier.sa1"
 MODEL_AIRPURIFIER_SA2 = "zhimi.airpurifier.sa2"
@@ -67,6 +76,7 @@ MODEL_AIRPURIFIER_V1 = "zhimi.airpurifier.v1"
 MODEL_AIRPURIFIER_V2 = "zhimi.airpurifier.v2"
 MODEL_AIRPURIFIER_V3 = "zhimi.airpurifier.v3"
 MODEL_AIRPURIFIER_V5 = "zhimi.airpurifier.v5"
+MODEL_AIRPURIFIER_ZA1 = "zhimi.airpurifier.za1"
 
 MODEL_AIRHUMIDIFIER_V1 = "zhimi.humidifier.v1"
 MODEL_AIRHUMIDIFIER_CA1 = "zhimi.humidifier.ca1"
@@ -74,6 +84,7 @@ MODEL_AIRHUMIDIFIER_CA4 = "zhimi.humidifier.ca4"
 MODEL_AIRHUMIDIFIER_CB1 = "zhimi.humidifier.cb1"
 MODEL_AIRHUMIDIFIER_JSQ = "deerma.humidifier.jsq"
 MODEL_AIRHUMIDIFIER_JSQ1 = "deerma.humidifier.jsq1"
+MODEL_AIRHUMIDIFIER_JSQ2W = "deerma.humidifier.jsq2w"
 MODEL_AIRHUMIDIFIER_MJJSQ = "deerma.humidifier.mjjsq"
 
 MODEL_AIRFRESH_A1 = "dmaker.airfresh.a1"
@@ -117,8 +128,12 @@ MODELS_PURIFIER_MIOT = [
     MODEL_AIRPURIFIER_3C,
     MODEL_AIRPURIFIER_3H,
     MODEL_AIRPURIFIER_PROH,
+    MODEL_AIRPURIFIER_PROH_EU,
+    MODEL_AIRPURIFIER_4_LITE_RMA1,
+    MODEL_AIRPURIFIER_4_LITE_RMB1,
     MODEL_AIRPURIFIER_4,
     MODEL_AIRPURIFIER_4_PRO,
+    MODEL_AIRPURIFIER_ZA1,
 ]
 MODELS_PURIFIER_MIIO = [
     MODEL_AIRPURIFIER_V1,
@@ -135,6 +150,7 @@ MODELS_PURIFIER_MIIO = [
     MODEL_AIRPURIFIER_SA2,
     MODEL_AIRPURIFIER_2S,
     MODEL_AIRPURIFIER_2H,
+    MODEL_AIRPURIFIER_COMPACT,
     MODEL_AIRFRESH_A1,
     MODEL_AIRFRESH_VA2,
     MODEL_AIRFRESH_VA4,
@@ -149,6 +165,7 @@ MODELS_HUMIDIFIER_MIOT = [MODEL_AIRHUMIDIFIER_CA4]
 MODELS_HUMIDIFIER_MJJSQ = [
     MODEL_AIRHUMIDIFIER_JSQ,
     MODEL_AIRHUMIDIFIER_JSQ1,
+    MODEL_AIRHUMIDIFIER_JSQ2W,
     MODEL_AIRHUMIDIFIER_MJJSQ,
 ]
 
@@ -208,12 +225,6 @@ MODELS_LIGHT = (
     + MODELS_LIGHT_MONO
 )
 
-# TODO: use const from pythonmiio once new release with the constant has been published. # pylint: disable=fixme
-ROCKROBO_S4 = "roborock.vacuum.s4"
-ROCKROBO_S4_MAX = "roborock.vacuum.a19"
-ROCKROBO_S5_MAX = "roborock.vacuum.s5e"
-ROCKROBO_S6_PURE = "roborock.vacuum.a08"
-ROCKROBO_E2 = "roborock.vacuum.e2"
 ROBOROCK_GENERIC = "roborock.vacuum"
 ROCKROBO_GENERIC = "rockrobo.vacuum"
 MODELS_VACUUM = [
@@ -227,6 +238,7 @@ MODELS_VACUUM = [
     ROCKROBO_S6_MAXV,
     ROCKROBO_S6_PURE,
     ROCKROBO_S7,
+    ROCKROBO_S7_MAXV,
     ROBOROCK_GENERIC,
     ROCKROBO_GENERIC,
 ]
@@ -238,9 +250,11 @@ MODELS_VACUUM_WITH_MOP = [
     ROCKROBO_S6_MAXV,
     ROCKROBO_S6_PURE,
     ROCKROBO_S7,
+    ROCKROBO_S7_MAXV,
 ]
 MODELS_VACUUM_WITH_SEPARATE_MOP = [
     ROCKROBO_S7,
+    ROCKROBO_S7_MAXV,
 ]
 
 MODELS_AIR_MONITOR = [
@@ -342,6 +356,10 @@ FEATURE_FLAGS_AIRPURIFIER_MIOT = (
     | FEATURE_SET_LED_BRIGHTNESS
 )
 
+FEATURE_FLAGS_AIRPURIFIER_4_LITE = (
+    FEATURE_SET_BUZZER | FEATURE_SET_CHILD_LOCK | FEATURE_SET_LED_BRIGHTNESS
+)
+
 FEATURE_FLAGS_AIRPURIFIER_4 = (
     FEATURE_SET_BUZZER
     | FEATURE_SET_CHILD_LOCK
@@ -383,6 +401,10 @@ FEATURE_FLAGS_AIRPURIFIER_V1 = FEATURE_FLAGS_AIRPURIFIER_MIIO | FEATURE_SET_AUTO
 
 FEATURE_FLAGS_AIRPURIFIER_V3 = (
     FEATURE_SET_BUZZER | FEATURE_SET_CHILD_LOCK | FEATURE_SET_LED
+)
+
+FEATURE_FLAGS_AIRPURIFIER_ZA1 = (
+    FEATURE_SET_BUZZER | FEATURE_SET_CHILD_LOCK | FEATURE_SET_FAVORITE_LEVEL
 )
 
 FEATURE_FLAGS_AIRHUMIDIFIER = (

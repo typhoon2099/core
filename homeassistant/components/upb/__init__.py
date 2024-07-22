@@ -1,10 +1,12 @@
 """Support the UPB PIM."""
+
 import upb_lib
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_COMMAND, CONF_FILE_PATH, CONF_HOST, Platform
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity import DeviceInfo, Entity
+from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity import Entity
 
 from .const import (
     ATTR_ADDRESS,
@@ -24,7 +26,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     file = config_entry.data[CONF_FILE_PATH]
 
     upb = upb_lib.UpbPim({"url": url, "UPStartExportFile": file})
-    upb.connect()
+    await upb.async_connect()
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][config_entry.entry_id] = {"upb": upb}
 

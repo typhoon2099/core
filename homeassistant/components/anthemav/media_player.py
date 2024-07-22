@@ -1,76 +1,28 @@
 """Support for Anthem Network Receivers and Processors."""
+
 from __future__ import annotations
 
 import logging
 
 from anthemav.connection import Connection
 from anthemav.protocol import AVR
-import voluptuous as vol
 
 from homeassistant.components.media_player import (
-    PLATFORM_SCHEMA,
     MediaPlayerDeviceClass,
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
     MediaPlayerState,
 )
-from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
-from homeassistant.const import CONF_HOST, CONF_MAC, CONF_NAME, CONF_PORT
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_MAC, CONF_MODEL
 from homeassistant.core import HomeAssistant, callback
-import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.issue_registry import IssueSeverity, async_create_issue
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
-from .const import (
-    ANTHEMAV_UDATE_SIGNAL,
-    CONF_MODEL,
-    DEFAULT_NAME,
-    DEFAULT_PORT,
-    DOMAIN,
-    MANUFACTURER,
-)
+from .const import ANTHEMAV_UPDATE_SIGNAL, DOMAIN, MANUFACTURER
 
 _LOGGER = logging.getLogger(__name__)
-
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
-    {
-        vol.Required(CONF_HOST): cv.string,
-        vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
-        vol.Optional(CONF_PORT, default=DEFAULT_PORT): cv.port,
-    }
-)
-
-
-async def async_setup_platform(
-    hass: HomeAssistant,
-    config: ConfigType,
-    async_add_entities: AddEntitiesCallback,
-    discovery_info: DiscoveryInfoType | None = None,
-) -> None:
-    """Set up our socket to the AVR."""
-    async_create_issue(
-        hass,
-        DOMAIN,
-        "deprecated_yaml",
-        breaks_in_ha_version="2022.10.0",
-        is_fixable=False,
-        severity=IssueSeverity.WARNING,
-        translation_key="deprecated_yaml",
-    )
-    _LOGGER.warning(
-        "Configuration of the Anthem A/V Receivers integration in YAML is "
-        "deprecated and will be removed in Home Assistant 2022.10; Your "
-        "existing configuration has been imported into the UI automatically "
-        "and can be safely removed from your configuration.yaml file"
-    )
-    await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": SOURCE_IMPORT},
-        data=config,
-    )
 
 
 async def async_setup_entry(
@@ -79,7 +31,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up entry."""
-    name = config_entry.data[CONF_NAME]
+    name = config_entry.title
     mac_address = config_entry.data[CONF_MAC]
     model = config_entry.data[CONF_MODEL]
 
@@ -99,9 +51,9 @@ class AnthemAVR(MediaPlayerEntity):
     """Entity reading values from Anthem AVR protocol."""
 
     _attr_has_entity_name = True
+    _attr_name = None
     _attr_should_poll = False
     _attr_device_class = MediaPlayerDeviceClass.RECEIVER
-    _attr_icon = "mdi:audio-video"
     _attr_supported_features = (
         MediaPlayerEntityFeature.VOLUME_SET
         | MediaPlayerEntityFeature.VOLUME_MUTE
@@ -126,17 +78,23 @@ class AnthemAVR(MediaPlayerEntity):
         self._zone_number = zone_number
         self._zone = avr.zones[zone_number]
         if zone_number > 1:
-            self._attr_name = f"zone {zone_number}"
-            self._attr_unique_id = f"{mac_address}_{zone_number}"
+            unique_id = f"{mac_address}_{zone_number}"
+            self._attr_unique_id = unique_id
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, unique_id)},
+                name=f"Zone {zone_number}",
+                manufacturer=MANUFACTURER,
+                model=model,
+                via_device=(DOMAIN, mac_address),
+            )
         else:
             self._attr_unique_id = mac_address
-
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, mac_address)},
-            name=name,
-            manufacturer=MANUFACTURER,
-            model=model,
-        )
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, mac_address)},
+                name=name,
+                manufacturer=MANUFACTURER,
+                model=model,
+            )
         self.set_states()
 
     async def async_added_to_hass(self) -> None:
@@ -144,7 +102,7 @@ class AnthemAVR(MediaPlayerEntity):
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
-                f"{ANTHEMAV_UDATE_SIGNAL}_{self._entry_id}",
+                f"{ANTHEMAV_UPDATE_SIGNAL}_{self._entry_id}",
                 self.update_states,
             )
         )

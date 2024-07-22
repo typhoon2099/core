@@ -1,4 +1,5 @@
 """Support for a demo mailbox."""
+
 from __future__ import annotations
 
 from hashlib import sha1
@@ -9,7 +10,7 @@ from typing import Any
 from homeassistant.components.mailbox import CONTENT_TYPE_MPEG, Mailbox, StreamError
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
-from homeassistant.util import dt
+from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,8 +34,10 @@ class DemoMailbox(Mailbox):
         super().__init__(hass, name)
         self._messages: dict[str, dict[str, Any]] = {}
         txt = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. "
-        for idx in range(0, 10):
-            msgtime = int(dt.as_timestamp(dt.utcnow()) - 3600 * 24 * (10 - idx))
+        for idx in range(10):
+            msgtime = int(
+                dt_util.as_timestamp(dt_util.utcnow()) - 3600 * 24 * (10 - idx)
+            )
             msgtxt = f"Message {idx + 1}. {txt * (1 + idx * (idx % 2))}"
             msgsha = sha1(msgtxt.encode("utf-8")).hexdigest()
             msg = {
@@ -63,20 +66,23 @@ class DemoMailbox(Mailbox):
         """Return if messages have attached media files."""
         return True
 
+    def _get_media(self) -> bytes:
+        """Return the media blob for the msgid."""
+        audio_path = os.path.join(os.path.dirname(__file__), "tts.mp3")
+        with open(audio_path, "rb") as file:
+            return file.read()
+
     async def async_get_media(self, msgid: str) -> bytes:
         """Return the media blob for the msgid."""
         if msgid not in self._messages:
             raise StreamError("Message not found")
-
-        audio_path = os.path.join(os.path.dirname(__file__), "tts.mp3")
-        with open(audio_path, "rb") as file:
-            return file.read()
+        return await self.hass.async_add_executor_job(self._get_media)
 
     async def async_get_messages(self) -> list[dict[str, Any]]:
         """Return a list of the current messages."""
         return sorted(
             self._messages.values(),
-            key=lambda item: item["info"]["origtime"],  # type: ignore[no-any-return]
+            key=lambda item: item["info"]["origtime"],
             reverse=True,
         )
 

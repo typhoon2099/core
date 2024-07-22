@@ -1,4 +1,5 @@
 """Support for French FAI Bouygues Bbox routers."""
+
 from __future__ import annotations
 
 from collections import namedtuple
@@ -10,7 +11,7 @@ import voluptuous as vol
 
 from homeassistant.components.device_tracker import (
     DOMAIN,
-    PLATFORM_SCHEMA as PARENT_PLATFORM_SCHEMA,
+    PLATFORM_SCHEMA as DEVICE_TRACKER_PLATFORM_SCHEMA,
     DeviceScanner,
 )
 from homeassistant.const import CONF_HOST
@@ -26,7 +27,7 @@ DEFAULT_HOST = "192.168.1.254"
 
 MIN_TIME_BETWEEN_SCANS = timedelta(seconds=60)
 
-PLATFORM_SCHEMA = PARENT_PLATFORM_SCHEMA.extend(
+PLATFORM_SCHEMA = DEVICE_TRACKER_PLATFORM_SCHEMA.extend(
     {vol.Optional(CONF_HOST, default=DEFAULT_HOST): cv.string}
 )
 
@@ -42,7 +43,7 @@ Device = namedtuple("Device", ["mac", "name", "ip", "last_update"])
 
 
 class BboxDeviceScanner(DeviceScanner):
-    """This class scans for devices connected to the bbox."""
+    """Scanner for devices connected to the bbox."""
 
     def __init__(self, config):
         """Get host from config."""

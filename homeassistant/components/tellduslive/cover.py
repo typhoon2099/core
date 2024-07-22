@@ -1,4 +1,5 @@
 """Support for Tellstick covers using Tellstick Net."""
+
 from typing import Any
 
 from homeassistant.components import cover
@@ -8,8 +9,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import TelldusLiveClient
 from .. import tellduslive
+from . import TelldusLiveClient
 from .entry import TelldusLiveEntity
 
 
@@ -35,6 +36,8 @@ async def async_setup_entry(
 class TelldusLiveCover(TelldusLiveEntity, CoverEntity):
     """Representation of a cover."""
 
+    _attr_name = None
+
     @property
     def is_closed(self) -> bool:
         """Return the current position of the cover."""
@@ -43,14 +46,14 @@ class TelldusLiveCover(TelldusLiveEntity, CoverEntity):
     def close_cover(self, **kwargs: Any) -> None:
         """Close the cover."""
         self.device.down()
-        self._update_callback()
+        self.schedule_update_ha_state()
 
     def open_cover(self, **kwargs: Any) -> None:
         """Open the cover."""
         self.device.up()
-        self._update_callback()
+        self.schedule_update_ha_state()
 
     def stop_cover(self, **kwargs: Any) -> None:
         """Stop the cover."""
         self.device.stop()
-        self._update_callback()
+        self.schedule_update_ha_state()

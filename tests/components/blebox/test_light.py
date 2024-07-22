@@ -1,4 +1,5 @@
 """BleBox light entities tests."""
+
 import logging
 from unittest.mock import AsyncMock, PropertyMock
 
@@ -19,6 +20,7 @@ from homeassistant.const import (
     STATE_ON,
     STATE_UNKNOWN,
 )
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
 from .conftest import async_setup_entity, mock_feature
@@ -49,11 +51,13 @@ def dimmer_fixture():
     return (feature, "light.dimmerbox_brightness")
 
 
-async def test_dimmer_init(dimmer, hass, config):
+async def test_dimmer_init(
+    dimmer, hass: HomeAssistant, device_registry: dr.DeviceRegistry
+) -> None:
     """Test cover default state."""
 
     _, entity_id = dimmer
-    entry = await async_setup_entity(hass, config, entity_id)
+    entry = await async_setup_entity(hass, entity_id)
     assert entry.unique_id == "BleBox-dimmerBox-1afe34e750b8-brightness"
 
     state = hass.states.get(entity_id)
@@ -65,7 +69,6 @@ async def test_dimmer_init(dimmer, hass, config):
     assert state.attributes[ATTR_BRIGHTNESS] == 65
     assert state.state == STATE_ON
 
-    device_registry = dr.async_get(hass)
     device = device_registry.async_get(entry.device_id)
 
     assert device.name == "My dimmer"
@@ -75,7 +78,7 @@ async def test_dimmer_init(dimmer, hass, config):
     assert device.sw_version == "1.23"
 
 
-async def test_dimmer_update(dimmer, hass, config):
+async def test_dimmer_update(dimmer, hass: HomeAssistant) -> None:
     """Test light updating."""
 
     feature_mock, entity_id = dimmer
@@ -84,14 +87,14 @@ async def test_dimmer_update(dimmer, hass, config):
         feature_mock.brightness = 53
 
     feature_mock.async_update = AsyncMock(side_effect=initial_update)
-    await async_setup_entity(hass, config, entity_id)
+    await async_setup_entity(hass, entity_id)
 
     state = hass.states.get(entity_id)
     assert state.attributes[ATTR_BRIGHTNESS] == 53
     assert state.state == STATE_ON
 
 
-async def test_dimmer_on(dimmer, hass, config):
+async def test_dimmer_on(dimmer, hass: HomeAssistant) -> None:
     """Test light on."""
 
     feature_mock, entity_id = dimmer
@@ -102,7 +105,7 @@ async def test_dimmer_on(dimmer, hass, config):
         feature_mock.sensible_on_value = 254
 
     feature_mock.async_update = AsyncMock(side_effect=initial_update)
-    await async_setup_entity(hass, config, entity_id)
+    await async_setup_entity(hass, entity_id)
     feature_mock.async_update = AsyncMock()
 
     state = hass.states.get(entity_id)
@@ -126,7 +129,7 @@ async def test_dimmer_on(dimmer, hass, config):
     assert state.attributes[ATTR_BRIGHTNESS] == 254
 
 
-async def test_dimmer_on_with_brightness(dimmer, hass, config):
+async def test_dimmer_on_with_brightness(dimmer, hass: HomeAssistant) -> None:
     """Test light on with a brightness value."""
 
     feature_mock, entity_id = dimmer
@@ -137,7 +140,7 @@ async def test_dimmer_on_with_brightness(dimmer, hass, config):
         feature_mock.sensible_on_value = 254
 
     feature_mock.async_update = AsyncMock(side_effect=initial_update)
-    await async_setup_entity(hass, config, entity_id)
+    await async_setup_entity(hass, entity_id)
     feature_mock.async_update = AsyncMock()
 
     state = hass.states.get(entity_id)
@@ -167,7 +170,7 @@ async def test_dimmer_on_with_brightness(dimmer, hass, config):
     assert state.state == STATE_ON
 
 
-async def test_dimmer_off(dimmer, hass, config):
+async def test_dimmer_off(dimmer, hass: HomeAssistant) -> None:
     """Test light off."""
 
     feature_mock, entity_id = dimmer
@@ -176,7 +179,7 @@ async def test_dimmer_off(dimmer, hass, config):
         feature_mock.is_on = True
 
     feature_mock.async_update = AsyncMock(side_effect=initial_update)
-    await async_setup_entity(hass, config, entity_id)
+    await async_setup_entity(hass, entity_id)
     feature_mock.async_update = AsyncMock()
 
     state = hass.states.get(entity_id)
@@ -196,7 +199,7 @@ async def test_dimmer_off(dimmer, hass, config):
 
     state = hass.states.get(entity_id)
     assert state.state == STATE_OFF
-    assert ATTR_BRIGHTNESS not in state.attributes
+    assert state.attributes[ATTR_BRIGHTNESS] is None
 
 
 @pytest.fixture(name="wlightbox_s")
@@ -222,11 +225,13 @@ def wlightboxs_fixture():
     return (feature, "light.wlightboxs_color")
 
 
-async def test_wlightbox_s_init(wlightbox_s, hass, config):
+async def test_wlightbox_s_init(
+    wlightbox_s, hass: HomeAssistant, device_registry: dr.DeviceRegistry
+) -> None:
     """Test cover default state."""
 
     _, entity_id = wlightbox_s
-    entry = await async_setup_entity(hass, config, entity_id)
+    entry = await async_setup_entity(hass, entity_id)
     assert entry.unique_id == "BleBox-wLightBoxS-1afe34e750b8-color"
 
     state = hass.states.get(entity_id)
@@ -235,10 +240,9 @@ async def test_wlightbox_s_init(wlightbox_s, hass, config):
     color_modes = state.attributes[ATTR_SUPPORTED_COLOR_MODES]
     assert color_modes == [ColorMode.BRIGHTNESS]
 
-    assert ATTR_BRIGHTNESS not in state.attributes
+    assert state.attributes[ATTR_BRIGHTNESS] is None
     assert state.state == STATE_UNKNOWN
 
-    device_registry = dr.async_get(hass)
     device = device_registry.async_get(entry.device_id)
 
     assert device.name == "My wLightBoxS"
@@ -248,7 +252,7 @@ async def test_wlightbox_s_init(wlightbox_s, hass, config):
     assert device.sw_version == "1.23"
 
 
-async def test_wlightbox_s_update(wlightbox_s, hass, config):
+async def test_wlightbox_s_update(wlightbox_s, hass: HomeAssistant) -> None:
     """Test light updating."""
 
     feature_mock, entity_id = wlightbox_s
@@ -259,14 +263,14 @@ async def test_wlightbox_s_update(wlightbox_s, hass, config):
 
     feature_mock.async_update = AsyncMock(side_effect=initial_update)
 
-    await async_setup_entity(hass, config, entity_id)
+    await async_setup_entity(hass, entity_id)
 
     state = hass.states.get(entity_id)
     assert state.state == STATE_ON
     assert state.attributes[ATTR_BRIGHTNESS] == 0xAB
 
 
-async def test_wlightbox_s_on(wlightbox_s, hass, config):
+async def test_wlightbox_s_on(wlightbox_s, hass: HomeAssistant) -> None:
     """Test light on."""
 
     feature_mock, entity_id = wlightbox_s
@@ -276,7 +280,7 @@ async def test_wlightbox_s_on(wlightbox_s, hass, config):
         feature_mock.sensible_on_value = 254
 
     feature_mock.async_update = AsyncMock(side_effect=initial_update)
-    await async_setup_entity(hass, config, entity_id)
+    await async_setup_entity(hass, entity_id)
     feature_mock.async_update = AsyncMock()
 
     state = hass.states.get(entity_id)
@@ -325,11 +329,13 @@ def wlightbox_fixture():
     return (feature, "light.wlightbox_color")
 
 
-async def test_wlightbox_init(wlightbox, hass, config):
+async def test_wlightbox_init(
+    wlightbox, hass: HomeAssistant, device_registry: dr.DeviceRegistry
+) -> None:
     """Test cover default state."""
 
     _, entity_id = wlightbox
-    entry = await async_setup_entity(hass, config, entity_id)
+    entry = await async_setup_entity(hass, entity_id)
     assert entry.unique_id == "BleBox-wLightBox-1afe34e750b8-color"
 
     state = hass.states.get(entity_id)
@@ -338,11 +344,10 @@ async def test_wlightbox_init(wlightbox, hass, config):
     color_modes = state.attributes[ATTR_SUPPORTED_COLOR_MODES]
     assert color_modes == [ColorMode.RGBW]
 
-    assert ATTR_BRIGHTNESS not in state.attributes
-    assert ATTR_RGBW_COLOR not in state.attributes
+    assert state.attributes[ATTR_BRIGHTNESS] is None
+    assert state.attributes[ATTR_RGBW_COLOR] is None
     assert state.state == STATE_UNKNOWN
 
-    device_registry = dr.async_get(hass)
     device = device_registry.async_get(entry.device_id)
 
     assert device.name == "My wLightBox"
@@ -352,7 +357,7 @@ async def test_wlightbox_init(wlightbox, hass, config):
     assert device.sw_version == "1.23"
 
 
-async def test_wlightbox_update(wlightbox, hass, config):
+async def test_wlightbox_update(wlightbox, hass: HomeAssistant) -> None:
     """Test light updating."""
 
     feature_mock, entity_id = wlightbox
@@ -363,14 +368,14 @@ async def test_wlightbox_update(wlightbox, hass, config):
         feature_mock.white_value = 0x3A
 
     feature_mock.async_update = AsyncMock(side_effect=initial_update)
-    await async_setup_entity(hass, config, entity_id)
+    await async_setup_entity(hass, entity_id)
 
     state = hass.states.get(entity_id)
     assert state.attributes[ATTR_RGBW_COLOR] == (0xFA, 0x00, 0x20, 0x3A)
     assert state.state == STATE_ON
 
 
-async def test_wlightbox_on_rgbw(wlightbox, hass, config):
+async def test_wlightbox_on_rgbw(wlightbox, hass: HomeAssistant) -> None:
     """Test light on."""
 
     feature_mock, entity_id = wlightbox
@@ -379,7 +384,7 @@ async def test_wlightbox_on_rgbw(wlightbox, hass, config):
         feature_mock.is_on = False
 
     feature_mock.async_update = AsyncMock(side_effect=initial_update)
-    await async_setup_entity(hass, config, entity_id)
+    await async_setup_entity(hass, entity_id)
     feature_mock.async_update = AsyncMock()
 
     state = hass.states.get(entity_id)
@@ -420,7 +425,7 @@ async def test_wlightbox_on_rgbw(wlightbox, hass, config):
     assert state.attributes[ATTR_RGBW_COLOR] == (0xC1, 0xD2, 0xF3, 0xC7)
 
 
-async def test_wlightbox_on_to_last_color(wlightbox, hass, config):
+async def test_wlightbox_on_to_last_color(wlightbox, hass: HomeAssistant) -> None:
     """Test light on."""
 
     feature_mock, entity_id = wlightbox
@@ -429,7 +434,7 @@ async def test_wlightbox_on_to_last_color(wlightbox, hass, config):
         feature_mock.is_on = False
 
     feature_mock.async_update = AsyncMock(side_effect=initial_update)
-    await async_setup_entity(hass, config, entity_id)
+    await async_setup_entity(hass, entity_id)
     feature_mock.async_update = AsyncMock()
 
     state = hass.states.get(entity_id)
@@ -456,7 +461,7 @@ async def test_wlightbox_on_to_last_color(wlightbox, hass, config):
     assert state.state == STATE_ON
 
 
-async def test_wlightbox_off(wlightbox, hass, config):
+async def test_wlightbox_off(wlightbox, hass: HomeAssistant) -> None:
     """Test light off."""
 
     feature_mock, entity_id = wlightbox
@@ -465,7 +470,7 @@ async def test_wlightbox_off(wlightbox, hass, config):
         feature_mock.is_on = True
 
     feature_mock.async_update = AsyncMock(side_effect=initial_update)
-    await async_setup_entity(hass, config, entity_id)
+    await async_setup_entity(hass, entity_id)
     feature_mock.async_update = AsyncMock()
 
     state = hass.states.get(entity_id)
@@ -486,32 +491,36 @@ async def test_wlightbox_off(wlightbox, hass, config):
     )
 
     state = hass.states.get(entity_id)
-    assert ATTR_RGBW_COLOR not in state.attributes
+    assert state.attributes[ATTR_RGBW_COLOR] is None
     assert state.state == STATE_OFF
 
 
 @pytest.mark.parametrize("feature", ALL_LIGHT_FIXTURES, indirect=["feature"])
-async def test_update_failure(feature, hass, config, caplog):
+async def test_update_failure(
+    feature, hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
     """Test that update failures are logged."""
 
     caplog.set_level(logging.ERROR)
 
     feature_mock, entity_id = feature
     feature_mock.async_update = AsyncMock(side_effect=blebox_uniapi.error.ClientError)
-    await async_setup_entity(hass, config, entity_id)
+    await async_setup_entity(hass, entity_id)
 
     assert f"Updating '{feature_mock.full_name}' failed: " in caplog.text
 
 
 @pytest.mark.parametrize("feature", ALL_LIGHT_FIXTURES, indirect=["feature"])
-async def test_turn_on_failure(feature, hass, config, caplog):
+async def test_turn_on_failure(
+    feature, hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
     """Test that turn_on failures are logged."""
 
     caplog.set_level(logging.ERROR)
 
     feature_mock, entity_id = feature
     feature_mock.async_on = AsyncMock(side_effect=ValueError)
-    await async_setup_entity(hass, config, entity_id)
+    await async_setup_entity(hass, entity_id)
 
     feature_mock.sensible_on_value = 123
     with pytest.raises(ValueError) as info:
@@ -527,7 +536,7 @@ async def test_turn_on_failure(feature, hass, config, caplog):
     )
 
 
-async def test_wlightbox_on_effect(wlightbox, hass, config):
+async def test_wlightbox_on_effect(wlightbox, hass: HomeAssistant) -> None:
     """Test light on."""
 
     feature_mock, entity_id = wlightbox
@@ -536,7 +545,7 @@ async def test_wlightbox_on_effect(wlightbox, hass, config):
         feature_mock.is_on = False
 
     feature_mock.async_update = AsyncMock(side_effect=initial_update)
-    await async_setup_entity(hass, config, entity_id)
+    await async_setup_entity(hass, entity_id)
     feature_mock.async_update = AsyncMock()
 
     state = hass.states.get(entity_id)
@@ -557,9 +566,9 @@ async def test_wlightbox_on_effect(wlightbox, hass, config):
         )
 
     assert (
-        f"Turning on with effect '{feature_mock.full_name}' failed: NOT IN LIST not in effect list."
-        in str(info.value)
-    )
+        f"Turning on with effect '{feature_mock.full_name}' failed: "
+        "NOT IN LIST not in effect list."
+    ) in str(info.value)
 
     await hass.services.async_call(
         "light",

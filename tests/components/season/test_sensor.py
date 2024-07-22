@@ -1,4 +1,5 @@
 """The tests for the Season integration."""
+
 from datetime import datetime
 
 from freezegun import freeze_time
@@ -15,7 +16,8 @@ from homeassistant.components.season.sensor import (
     STATE_SUMMER,
     STATE_WINTER,
 )
-from homeassistant.const import CONF_TYPE, STATE_UNKNOWN
+from homeassistant.components.sensor import ATTR_OPTIONS, SensorDeviceClass
+from homeassistant.const import ATTR_DEVICE_CLASS, CONF_TYPE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
@@ -70,9 +72,10 @@ def idfn(val):
         return val.strftime("%Y%m%d")
 
 
-@pytest.mark.parametrize("type,day,expected", NORTHERN_PARAMETERS, ids=idfn)
+@pytest.mark.parametrize(("type", "day", "expected"), NORTHERN_PARAMETERS, ids=idfn)
 async def test_season_northern_hemisphere(
     hass: HomeAssistant,
+    entity_registry: er.EntityRegistry,
     mock_config_entry: MockConfigEntry,
     type: str,
     day: datetime,
@@ -92,16 +95,20 @@ async def test_season_northern_hemisphere(
     state = hass.states.get("sensor.season")
     assert state
     assert state.state == expected
+    assert state.attributes[ATTR_DEVICE_CLASS] == SensorDeviceClass.ENUM
+    assert state.attributes[ATTR_OPTIONS] == ["spring", "summer", "autumn", "winter"]
 
-    entity_registry = er.async_get(hass)
     entry = entity_registry.async_get("sensor.season")
     assert entry
     assert entry.unique_id == mock_config_entry.entry_id
+    assert entry.translation_key == "season"
 
 
-@pytest.mark.parametrize("type,day,expected", SOUTHERN_PARAMETERS, ids=idfn)
+@pytest.mark.parametrize(("type", "day", "expected"), SOUTHERN_PARAMETERS, ids=idfn)
 async def test_season_southern_hemisphere(
     hass: HomeAssistant,
+    device_registry: dr.DeviceRegistry,
+    entity_registry: er.EntityRegistry,
     mock_config_entry: MockConfigEntry,
     type: str,
     day: datetime,
@@ -121,13 +128,14 @@ async def test_season_southern_hemisphere(
     state = hass.states.get("sensor.season")
     assert state
     assert state.state == expected
+    assert state.attributes[ATTR_DEVICE_CLASS] == SensorDeviceClass.ENUM
+    assert state.attributes[ATTR_OPTIONS] == ["spring", "summer", "autumn", "winter"]
 
-    entity_registry = er.async_get(hass)
     entry = entity_registry.async_get("sensor.season")
     assert entry
     assert entry.unique_id == mock_config_entry.entry_id
+    assert entry.translation_key == "season"
 
-    device_registry = dr.async_get(hass)
     assert entry.device_id
     device_entry = device_registry.async_get(entry.device_id)
     assert device_entry
@@ -138,6 +146,7 @@ async def test_season_southern_hemisphere(
 
 async def test_season_equator(
     hass: HomeAssistant,
+    entity_registry: er.EntityRegistry,
     mock_config_entry: MockConfigEntry,
 ) -> None:
     """Test that season should be unknown for equator."""
@@ -152,7 +161,6 @@ async def test_season_equator(
     assert state
     assert state.state == STATE_UNKNOWN
 
-    entity_registry = er.async_get(hass)
     entry = entity_registry.async_get("sensor.season")
     assert entry
     assert entry.unique_id == mock_config_entry.entry_id

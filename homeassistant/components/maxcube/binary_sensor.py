@@ -1,12 +1,13 @@
 """Support for MAX! binary sensors via MAX! Cube."""
+
 from __future__ import annotations
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
 )
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
@@ -28,8 +29,7 @@ def setup_platform(
             if device.is_windowshutter():
                 devices.append(MaxCubeShutter(handler, device))
 
-    if devices:
-        add_entities(devices)
+    add_entities(devices)
 
 
 class MaxCubeBinarySensorBase(BinarySensorEntity):

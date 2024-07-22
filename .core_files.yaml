@@ -20,12 +20,17 @@ base_platforms: &base_platforms
   - homeassistant/components/camera/**
   - homeassistant/components/climate/**
   - homeassistant/components/cover/**
+  - homeassistant/components/date/**
+  - homeassistant/components/datetime/**
   - homeassistant/components/device_tracker/**
   - homeassistant/components/diagnostics/**
+  - homeassistant/components/event/**
   - homeassistant/components/fan/**
   - homeassistant/components/geo_location/**
   - homeassistant/components/humidifier/**
+  - homeassistant/components/image/**
   - homeassistant/components/image_processing/**
+  - homeassistant/components/lawn_mower/**
   - homeassistant/components/light/**
   - homeassistant/components/lock/**
   - homeassistant/components/media_player/**
@@ -38,17 +43,21 @@ base_platforms: &base_platforms
   - homeassistant/components/siren/**
   - homeassistant/components/stt/**
   - homeassistant/components/switch/**
+  - homeassistant/components/text/**
+  - homeassistant/components/time/**
+  - homeassistant/components/todo/**
   - homeassistant/components/tts/**
   - homeassistant/components/update/**
   - homeassistant/components/vacuum/**
+  - homeassistant/components/valve/**
   - homeassistant/components/water_heater/**
   - homeassistant/components/weather/**
 
 # Extra components that trigger the full suite
 components: &components
-  - homeassistant/components/alert/**
   - homeassistant/components/alexa/**
   - homeassistant/components/application_credentials/**
+  - homeassistant/components/assist_pipeline/**
   - homeassistant/components/auth/**
   - homeassistant/components/automation/**
   - homeassistant/components/backup/**
@@ -81,6 +90,7 @@ components: &components
   - homeassistant/components/lovelace/**
   - homeassistant/components/media_source/**
   - homeassistant/components/mjpeg/**
+  - homeassistant/components/modbus/**
   - homeassistant/components/mqtt/**
   - homeassistant/components/network/**
   - homeassistant/components/onboarding/**
@@ -88,8 +98,8 @@ components: &components
   - homeassistant/components/persistent_notification/**
   - homeassistant/components/person/**
   - homeassistant/components/recorder/**
+  - homeassistant/components/recovery_mode/**
   - homeassistant/components/repairs/**
-  - homeassistant/components/safe_mode/**
   - homeassistant/components/script/**
   - homeassistant/components/shopping_list/**
   - homeassistant/components/ssdp/**
@@ -111,13 +121,15 @@ tests: &tests
   - pylint/**
   - requirements_test_pre_commit.txt
   - requirements_test.txt
+  - tests/*.py
   - tests/auth/**
   - tests/backports/**
-  - tests/common.py
-  - tests/conftest.py
+  - tests/components/history/**
+  - tests/components/logbook/**
+  - tests/components/recorder/**
+  - tests/components/sensor/**
   - tests/hassfest/**
   - tests/helpers/**
-  - tests/ignore_uncaught_exceptions.py
   - tests/mock/**
   - tests/pylint/**
   - tests/scripts/**
@@ -132,7 +144,6 @@ other: &other
 requirements: &requirements
   - .github/workflows/**
   - homeassistant/package_constraints.txt
-  - script/pip_check
   - requirements*.txt
   - pyproject.toml
 

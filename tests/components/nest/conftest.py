@@ -1,9 +1,12 @@
 """Common libraries for test setup."""
+
 from __future__ import annotations
 
+from asyncio import AbstractEventLoop
 from collections.abc import Generator
 import copy
 import shutil
+import time
 from typing import Any
 from unittest.mock import AsyncMock, patch
 import uuid
@@ -18,7 +21,7 @@ from homeassistant.components.application_credentials import (
     async_import_client_credential,
 )
 from homeassistant.components.nest import DOMAIN
-from homeassistant.components.nest.const import CONF_SUBSCRIBER_ID
+from homeassistant.components.nest.const import CONF_SUBSCRIBER_ID, SDM_SCOPES
 from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
 
@@ -27,7 +30,6 @@ from .common import (
     PROJECT_ID,
     SUBSCRIBER_ID,
     TEST_CONFIG_APP_CREDS,
-    TEST_CONFIG_YAML_ONLY,
     CreateDevice,
     FakeSubscriber,
     NestTestConfig,
@@ -36,6 +38,10 @@ from .common import (
 )
 
 from tests.common import MockConfigEntry
+from tests.typing import ClientSessionGenerator
+
+FAKE_TOKEN = "some-token"
+FAKE_REFRESH_TOKEN = "some-refresh-token"
 
 
 class FakeAuth(AbstractAuth):
@@ -82,13 +88,17 @@ class FakeAuth(AbstractAuth):
 
 
 @pytest.fixture
-def aiohttp_client(loop, aiohttp_client, socket_enabled):
+def aiohttp_client(
+    event_loop: AbstractEventLoop,
+    aiohttp_client: ClientSessionGenerator,
+    socket_enabled: None,
+) -> ClientSessionGenerator:
     """Return aiohttp_client and allow opening sockets."""
     return aiohttp_client
 
 
 @pytest.fixture
-async def auth(aiohttp_client):
+async def auth(aiohttp_client: ClientSessionGenerator) -> FakeAuth:
     """Fixture for an AbstractAuth."""
     auth = FakeAuth()
     app = aiohttp.web.Application()
@@ -99,7 +109,7 @@ async def auth(aiohttp_client):
 
 
 @pytest.fixture(autouse=True)
-def cleanup_media_storage(hass):
+def cleanup_media_storage(hass: HomeAssistant) -> Generator[None]:
     """Test cleanup, remove any media storage persisted during the test."""
     tmp_path = str(uuid.uuid4())
     with patch("homeassistant.components.nest.media_source.MEDIA_PATH", new=tmp_path):
@@ -160,7 +170,7 @@ async def create_device(
     device_id: str,
     device_type: str,
     device_traits: dict[str, Any],
-) -> None:
+) -> CreateDevice:
     """Fixture for creating devices."""
     factory = CreateDevice(device_manager, auth)
     factory.data.update(
@@ -186,18 +196,9 @@ def subscriber_id() -> str:
 
 
 @pytest.fixture
-def auth_implementation(nest_test_config: NestTestConfig) -> str | None:
-    """Fixture to let tests override the auth implementation in the config entry."""
-    return nest_test_config.auth_implementation
-
-
-@pytest.fixture(
-    params=[TEST_CONFIG_YAML_ONLY, TEST_CONFIG_APP_CREDS],
-    ids=["yaml-config-only", "app-creds"],
-)
-def nest_test_config(request) -> NestTestConfig:
+def nest_test_config() -> NestTestConfig:
     """Fixture that sets up the configuration used for the test."""
-    return request.param
+    return TEST_CONFIG_APP_CREDS
 
 
 @pytest.fixture
@@ -221,11 +222,29 @@ def config_entry_unique_id() -> str:
 
 
 @pytest.fixture
+def token_expiration_time() -> float:
+    """Fixture for expiration time of the config entry auth token."""
+    return time.time() + 86400
+
+
+@pytest.fixture
+def token_entry(token_expiration_time: float) -> dict[str, Any]:
+    """Fixture for OAuth 'token' data for a ConfigEntry."""
+    return {
+        "access_token": FAKE_TOKEN,
+        "refresh_token": FAKE_REFRESH_TOKEN,
+        "scope": " ".join(SDM_SCOPES),
+        "token_type": "Bearer",
+        "expires_at": token_expiration_time,
+    }
+
+
+@pytest.fixture
 def config_entry(
     subscriber_id: str | None,
-    auth_implementation: str | None,
     nest_test_config: NestTestConfig,
     config_entry_unique_id: str,
+    token_entry: dict[str, Any],
 ) -> MockConfigEntry | None:
     """Fixture that sets up the ConfigEntry for the test."""
     if nest_test_config.config_entry_data is None:
@@ -236,7 +255,7 @@ def config_entry(
             data[CONF_SUBSCRIBER_ID] = subscriber_id
         else:
             del data[CONF_SUBSCRIBER_ID]
-    data["auth_implementation"] = auth_implementation
+    data["token"] = token_entry
     return MockConfigEntry(domain=DOMAIN, data=data, unique_id=config_entry_unique_id)
 
 
@@ -247,10 +266,7 @@ async def credential(hass: HomeAssistant, nest_test_config: NestTestConfig) -> N
         return
     assert await async_setup_component(hass, "application_credentials", {})
     await async_import_client_credential(
-        hass,
-        DOMAIN,
-        nest_test_config.credential,
-        nest_test_config.auth_implementation,
+        hass, DOMAIN, nest_test_config.credential, "imported-cred"
     )
 
 
@@ -282,7 +298,7 @@ async def setup_platform(
 
 
 @pytest.fixture(autouse=True)
-def reset_diagnostics() -> Generator[None, None, None]:
+def reset_diagnostics() -> Generator[None]:
     """Fixture to reset client library diagnostic counters."""
     yield
     diagnostics.reset()

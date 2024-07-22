@@ -1,15 +1,20 @@
 """Support for ADS sensors."""
+
 from __future__ import annotations
 
 import voluptuous as vol
 
-from homeassistant.components.sensor import PLATFORM_SCHEMA, SensorEntity
+from homeassistant.components.sensor import (
+    PLATFORM_SCHEMA as SENSOR_PLATFORM_SCHEMA,
+    SensorEntity,
+)
 from homeassistant.const import CONF_NAME, CONF_UNIT_OF_MEASUREMENT
 from homeassistant.core import HomeAssistant
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType, StateType
 
+from .. import ads
 from . import (
     ADS_TYPEMAP,
     CONF_ADS_FACTOR,
@@ -18,10 +23,9 @@ from . import (
     STATE_KEY_STATE,
     AdsEntity,
 )
-from .. import ads
 
 DEFAULT_NAME = "ADS sensor"
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+PLATFORM_SCHEMA = SENSOR_PLATFORM_SCHEMA.extend(
     {
         vol.Required(CONF_ADS_VAR): cv.string,
         vol.Optional(CONF_ADS_FACTOR): cv.positive_int,

@@ -1,4 +1,5 @@
 """Support for LaMetric buttons."""
+
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
@@ -9,43 +10,47 @@ from demetriek import LaMetricDevice
 
 from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
 from .coordinator import LaMetricDataUpdateCoordinator
 from .entity import LaMetricEntity
+from .helpers import lametric_exception_handler
 
 
-@dataclass
-class LaMetricButtonEntityDescriptionMixin:
-    """Mixin values for LaMetric entities."""
+@dataclass(frozen=True, kw_only=True)
+class LaMetricButtonEntityDescription(ButtonEntityDescription):
+    """Class describing LaMetric button entities."""
 
     press_fn: Callable[[LaMetricDevice], Awaitable[Any]]
-
-
-@dataclass
-class LaMetricButtonEntityDescription(
-    ButtonEntityDescription, LaMetricButtonEntityDescriptionMixin
-):
-    """Class describing LaMetric button entities."""
 
 
 BUTTONS = [
     LaMetricButtonEntityDescription(
         key="app_next",
-        name="Next app",
-        icon="mdi:arrow-right-bold",
+        translation_key="app_next",
         entity_category=EntityCategory.CONFIG,
         press_fn=lambda api: api.app_next(),
     ),
     LaMetricButtonEntityDescription(
         key="app_previous",
-        name="Previous app",
-        icon="mdi:arrow-left-bold",
+        translation_key="app_previous",
         entity_category=EntityCategory.CONFIG,
         press_fn=lambda api: api.app_previous(),
+    ),
+    LaMetricButtonEntityDescription(
+        key="dismiss_current",
+        translation_key="dismiss_current",
+        entity_category=EntityCategory.CONFIG,
+        press_fn=lambda api: api.dismiss_current_notification(),
+    ),
+    LaMetricButtonEntityDescription(
+        key="dismiss_all",
+        translation_key="dismiss_all",
+        entity_category=EntityCategory.CONFIG,
+        press_fn=lambda api: api.dismiss_all_notifications(),
     ),
 ]
 
@@ -81,6 +86,7 @@ class LaMetricButtonEntity(LaMetricEntity, ButtonEntity):
         self.entity_description = description
         self._attr_unique_id = f"{coordinator.data.serial_number}-{description.key}"
 
+    @lametric_exception_handler
     async def async_press(self) -> None:
         """Send out a command to LaMetric."""
         await self.entity_description.press_fn(self.coordinator.lametric)

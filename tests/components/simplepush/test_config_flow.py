@@ -1,13 +1,15 @@
 """Test Simplepush config flow."""
+
 from unittest.mock import patch
 
 import pytest
 from simplepush import UnknownError
 
-from homeassistant import config_entries, data_entry_flow
+from homeassistant import config_entries
 from homeassistant.components.simplepush.const import CONF_DEVICE_KEY, CONF_SALT, DOMAIN
 from homeassistant.const import CONF_NAME, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import FlowResultType
 
 from tests.common import MockConfigEntry
 
@@ -29,9 +31,7 @@ def simplepush_setup_fixture():
 @pytest.fixture(autouse=True)
 def mock_api_request():
     """Patch simplepush api request."""
-    with patch("homeassistant.components.simplepush.config_flow.send"), patch(
-        "homeassistant.components.simplepush.config_flow.send_encrypted"
-    ):
+    with patch("homeassistant.components.simplepush.config_flow.send"):
         yield
 
 
@@ -45,7 +45,7 @@ async def test_flow_successful(hass: HomeAssistant) -> None:
         result["flow_id"],
         user_input=MOCK_CONFIG,
     )
-    assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
+    assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "simplepush"
     assert result["data"] == MOCK_CONFIG
 
@@ -61,7 +61,7 @@ async def test_flow_with_password(hass: HomeAssistant) -> None:
         result["flow_id"],
         user_input=mock_config_pass,
     )
-    assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
+    assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "simplepush"
     assert result["data"] == mock_config_pass
 
@@ -84,7 +84,7 @@ async def test_flow_user_device_key_already_configured(hass: HomeAssistant) -> N
         result["flow_id"],
         user_input=MOCK_CONFIG,
     )
-    assert result["type"] == data_entry_flow.FlowResultType.ABORT
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
 
 
@@ -109,7 +109,7 @@ async def test_flow_user_name_already_configured(hass: HomeAssistant) -> None:
         result["flow_id"],
         user_input=MOCK_CONFIG,
     )
-    assert result["type"] == data_entry_flow.FlowResultType.ABORT
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
 
 
@@ -127,5 +127,5 @@ async def test_error_on_connection_failure(hass: HomeAssistant) -> None:
             result["flow_id"],
             user_input=MOCK_CONFIG,
         )
-        assert result["type"] == data_entry_flow.FlowResultType.FORM
+        assert result["type"] is FlowResultType.FORM
         assert result["errors"] == {"base": "cannot_connect"}

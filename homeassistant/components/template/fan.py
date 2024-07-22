@@ -1,4 +1,5 @@
 """Support for Template fans."""
+
 from __future__ import annotations
 
 import logging
@@ -93,7 +94,6 @@ async def _async_create_entities(hass, config):
     fans = []
 
     for object_id, entity_config in config[CONF_FANS].items():
-
         entity_config = rewrite_common_legacy_to_modern_conf(entity_config)
 
         unique_id = entity_config.get(CONF_UNIQUE_ID)
@@ -124,6 +124,7 @@ class TemplateFan(TemplateEntity, FanEntity):
     """A template fan component."""
 
     _attr_should_poll = False
+    _enable_turn_on_off_backwards_compatibility = False
 
     def __init__(
         self,
@@ -147,7 +148,6 @@ class TemplateFan(TemplateEntity, FanEntity):
         self._preset_mode_template = config.get(CONF_PRESET_MODE_TEMPLATE)
         self._oscillating_template = config.get(CONF_OSCILLATING_TEMPLATE)
         self._direction_template = config.get(CONF_DIRECTION_TEMPLATE)
-        self._supported_features = 0
 
         self._on_script = Script(hass, config[CONF_ON_ACTION], friendly_name, DOMAIN)
         self._off_script = Script(hass, config[CONF_OFF_ACTION], friendly_name, DOMAIN)
@@ -189,18 +189,18 @@ class TemplateFan(TemplateEntity, FanEntity):
         self._preset_modes = config.get(CONF_PRESET_MODES)
 
         if self._percentage_template:
-            self._supported_features |= FanEntityFeature.SET_SPEED
+            self._attr_supported_features |= FanEntityFeature.SET_SPEED
         if self._preset_mode_template and self._preset_modes:
-            self._supported_features |= FanEntityFeature.PRESET_MODE
+            self._attr_supported_features |= FanEntityFeature.PRESET_MODE
         if self._oscillating_template:
-            self._supported_features |= FanEntityFeature.OSCILLATE
+            self._attr_supported_features |= FanEntityFeature.OSCILLATE
         if self._direction_template:
-            self._supported_features |= FanEntityFeature.DIRECTION
+            self._attr_supported_features |= FanEntityFeature.DIRECTION
+        self._attr_supported_features |= (
+            FanEntityFeature.TURN_OFF | FanEntityFeature.TURN_ON
+        )
 
-    @property
-    def supported_features(self) -> int:
-        """Flag supported features."""
-        return self._supported_features
+        self._attr_assumed_state = self._template is None
 
     @property
     def speed_count(self) -> int:
@@ -287,15 +287,6 @@ class TemplateFan(TemplateEntity, FanEntity):
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set the preset_mode of the fan."""
-        if self.preset_modes and preset_mode not in self.preset_modes:
-            _LOGGER.error(
-                "Received invalid preset_mode: %s for entity %s. Expected: %s",
-                preset_mode,
-                self.entity_id,
-                self.preset_modes,
-            )
-            return
-
         self._preset_mode = preset_mode
 
         if self._set_preset_mode_script:
@@ -358,8 +349,9 @@ class TemplateFan(TemplateEntity, FanEntity):
 
         self._state = False
 
-    async def async_added_to_hass(self) -> None:
-        """Register callbacks."""
+    @callback
+    def _async_setup_templates(self) -> None:
+        """Set up templates."""
         if self._template:
             self.add_template_attribute(
                 "_state", self._template, None, self._update_state
@@ -397,7 +389,7 @@ class TemplateFan(TemplateEntity, FanEntity):
                 self._update_direction,
                 none_on_template_error=True,
             )
-        await super().async_added_to_hass()
+        super()._async_setup_templates()
 
     @callback
     def _update_percentage(self, percentage):
@@ -473,8 +465,3 @@ class TemplateFan(TemplateEntity, FanEntity):
                 ", ".join(_VALID_DIRECTIONS),
             )
             self._direction = None
-
-    @property
-    def assumed_state(self) -> bool:
-        """State is assumed, if no template given."""
-        return self._template is None

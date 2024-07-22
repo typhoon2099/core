@@ -1,4 +1,5 @@
 """Support for Osram Lightify."""
+
 from __future__ import annotations
 
 import logging
@@ -15,7 +16,7 @@ from homeassistant.components.light import (
     ATTR_HS_COLOR,
     ATTR_TRANSITION,
     EFFECT_RANDOM,
-    PLATFORM_SCHEMA,
+    PLATFORM_SCHEMA as LIGHT_PLATFORM_SCHEMA,
     ColorMode,
     LightEntity,
     LightEntityFeature,
@@ -44,7 +45,7 @@ DEFAULT_ALLOW_LIGHTIFY_SWITCHES = True
 DEFAULT_INTERVAL_LIGHTIFY_STATUS = 5
 DEFAULT_INTERVAL_LIGHTIFY_CONF = 3600
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+PLATFORM_SCHEMA = LIGHT_PLATFORM_SCHEMA.extend(
     {
         vol.Required(CONF_HOST): cv.string,
         vol.Optional(
@@ -82,8 +83,8 @@ def setup_platform(
     host = config[CONF_HOST]
     try:
         bridge = Lightify(host, log_level=logging.NOTSET)
-    except OSError as err:
-        _LOGGER.exception("Error connecting to bridge: %s due to: %s", host, err)
+    except OSError:
+        _LOGGER.exception("Error connecting to bridge %s", host)
         return
 
     setup_bridge(bridge, add_entities, config)
@@ -187,7 +188,6 @@ class Luminary(LightEntity):
         self._changed = changed
 
         self._unique_id = None
-        self._supported_features = []
         self._effect_list = []
         self._is_on = False
         self._available = True
@@ -205,9 +205,9 @@ class Luminary(LightEntity):
         """Get a unique ID (not implemented)."""
         raise NotImplementedError
 
-    def _get_supported_color_modes(self):
+    def _get_supported_color_modes(self) -> set[ColorMode]:
         """Get supported color modes."""
-        color_modes = set()
+        color_modes: set[ColorMode] = set()
         if "temp" in self._luminary.supported_features():
             color_modes.add(ColorMode.COLOR_TEMP)
 
@@ -222,9 +222,9 @@ class Luminary(LightEntity):
 
         return color_modes
 
-    def _get_supported_features(self):
+    def _get_supported_features(self) -> LightEntityFeature:
         """Get list of supported features."""
-        features = 0
+        features = LightEntityFeature(0)
         if "lum" in self._luminary.supported_features():
             features = features | LightEntityFeature.TRANSITION
 
@@ -270,11 +270,6 @@ class Luminary(LightEntity):
     def is_on(self):
         """Return True if the device is on."""
         return self._is_on
-
-    @property
-    def supported_features(self):
-        """List of supported features."""
-        return self._supported_features
 
     @property
     def effect_list(self):
@@ -360,11 +355,11 @@ class Luminary(LightEntity):
         self._luminary = luminary
         self.update_static_attributes()
 
-    def update_static_attributes(self):
+    def update_static_attributes(self) -> None:
         """Update static attributes of the luminary."""
         self._unique_id = self._get_unique_id()
         self._attr_supported_color_modes = self._get_supported_color_modes()
-        self._supported_features = self._get_supported_features()
+        self._attr_supported_features = self._get_supported_features()
         self._effect_list = self._get_effect_list()
         if ColorMode.COLOR_TEMP in self._attr_supported_color_modes:
             self._min_mireds = color_util.color_temperature_kelvin_to_mired(
@@ -418,7 +413,9 @@ class OsramLightifyLight(Luminary):
         """Update static attributes of the luminary."""
         super().update_static_attributes()
         attrs = {
-            "device_type": f"{self._luminary.type_id()} ({self._luminary.devicename()})",
+            "device_type": (
+                f"{self._luminary.type_id()} ({self._luminary.devicename()})"
+            ),
             "firmware_version": self._luminary.version(),
         }
         if self._luminary.devicetype().name == "SENSOR":
@@ -441,11 +438,11 @@ class OsramLightifyGroup(Luminary):
         #       users.
         return f"{self._luminary.lights()}"
 
-    def _get_supported_features(self):
+    def _get_supported_features(self) -> LightEntityFeature:
         """Get list of supported features."""
         features = super()._get_supported_features()
         if self._luminary.scenes():
-            features = features | LightEntityFeature.EFFECT
+            features |= LightEntityFeature.EFFECT
 
         return features
 

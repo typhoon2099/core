@@ -1,4 +1,5 @@
 """Support for Overkiz Vertical Covers."""
+
 from __future__ import annotations
 
 from typing import Any, cast
@@ -45,10 +46,21 @@ OVERKIZ_DEVICE_TO_DEVICE_CLASS = {
 class VerticalCover(OverkizGenericCover):
     """Representation of an Overkiz vertical cover."""
 
+    def __init__(
+        self, device_url: str, coordinator: OverkizDataUpdateCoordinator
+    ) -> None:
+        """Initialize vertical cover."""
+        super().__init__(device_url, coordinator)
+        self._attr_device_class = (
+            OVERKIZ_DEVICE_TO_DEVICE_CLASS.get(self.device.widget)
+            or OVERKIZ_DEVICE_TO_DEVICE_CLASS.get(self.device.ui_class)
+            or CoverDeviceClass.BLIND
+        )
+
     @property
-    def supported_features(self) -> int:
+    def supported_features(self) -> CoverEntityFeature:
         """Flag supported features."""
-        supported_features: int = super().supported_features
+        supported_features = super().supported_features
 
         if self.executor.has_command(OverkizCommand.SET_CLOSURE):
             supported_features |= CoverEntityFeature.SET_POSITION
@@ -65,21 +77,8 @@ class VerticalCover(OverkizGenericCover):
         return supported_features
 
     @property
-    def device_class(self) -> str:
-        """Return the class of the device."""
-        return cast(
-            str,
-            (
-                OVERKIZ_DEVICE_TO_DEVICE_CLASS.get(self.device.widget)
-                or OVERKIZ_DEVICE_TO_DEVICE_CLASS.get(self.device.ui_class)
-                or CoverDeviceClass.BLIND
-            ),
-        )
-
-    @property
     def current_cover_position(self) -> int | None:
-        """
-        Return current position of cover.
+        """Return current position of cover.
 
         None is unknown, 0 is closed, 100 is fully open.
         """

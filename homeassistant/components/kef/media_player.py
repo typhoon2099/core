@@ -1,4 +1,5 @@
 """Platform for the KEF Wireless Speakers."""
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -12,7 +13,7 @@ from getmac import get_mac_address
 import voluptuous as vol
 
 from homeassistant.components.media_player import (
-    PLATFORM_SCHEMA,
+    PLATFORM_SCHEMA as MEDIA_PLAYER_PLATFORM_SCHEMA,
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
     MediaPlayerState,
@@ -58,7 +59,7 @@ SERVICE_UPDATE_DSP = "update_dsp"
 
 DSP_SCAN_INTERVAL = timedelta(seconds=3600)
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+PLATFORM_SCHEMA = MEDIA_PLAYER_PLATFORM_SCHEMA.extend(
     {
         vol.Required(CONF_HOST): cv.string,
         vol.Required(CONF_TYPE): vol.In(["LS50", "LSX"]),
@@ -78,11 +79,13 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
 def get_ip_mode(host):
     """Get the 'mode' used to retrieve the MAC address."""
     try:
-        if ipaddress.ip_address(host).version == 6:
-            return "ip6"
-        return "ip"
+        ip_address = ipaddress.ip_address(host)
     except ValueError:
         return "hostname"
+
+    if ip_address.version == 6:
+        return "ip6"
+    return "ip"
 
 
 async def async_setup_platform(
@@ -118,7 +121,7 @@ async def async_setup_platform(
 
     mode = get_ip_mode(host)
     mac = await hass.async_add_executor_job(partial(get_mac_address, **{mode: host}))
-    if mac is None:
+    if mac is None or mac == "00:00:00:00:00:00":
         raise PlatformNotReady("Cannot get the ip address of kef speaker.")
 
     unique_id = f"kef-{mac}"
@@ -269,7 +272,7 @@ class KefMediaPlayer(MediaPlayerEntity):
     async def async_turn_on(self) -> None:
         """Turn the media player on."""
         if not self._supports_on:
-            raise NotImplementedError()
+            raise NotImplementedError
         await self._speaker.turn_on()
 
     async def async_volume_up(self) -> None:
@@ -321,15 +324,15 @@ class KefMediaPlayer(MediaPlayerEntity):
             return
 
         mode = await self._speaker.get_mode()
-        self._dsp = dict(
-            desk_db=await self._speaker.get_desk_db(),
-            wall_db=await self._speaker.get_wall_db(),
-            treble_db=await self._speaker.get_treble_db(),
-            high_hz=await self._speaker.get_high_hz(),
-            low_hz=await self._speaker.get_low_hz(),
-            sub_db=await self._speaker.get_sub_db(),
+        self._dsp = {
+            "desk_db": await self._speaker.get_desk_db(),
+            "wall_db": await self._speaker.get_wall_db(),
+            "treble_db": await self._speaker.get_treble_db(),
+            "high_hz": await self._speaker.get_high_hz(),
+            "low_hz": await self._speaker.get_low_hz(),
+            "sub_db": await self._speaker.get_sub_db(),
             **mode._asdict(),
-        )
+        }
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to DSP updates."""

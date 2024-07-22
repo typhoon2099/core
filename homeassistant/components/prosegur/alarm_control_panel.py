@@ -1,4 +1,5 @@
 """Support for Prosegur alarm control panels."""
+
 from __future__ import annotations
 
 import logging
@@ -6,8 +7,10 @@ import logging
 from pyprosegur.auth import Auth
 from pyprosegur.installation import Installation, Status
 
-import homeassistant.components.alarm_control_panel as alarm
-from homeassistant.components.alarm_control_panel import AlarmControlPanelEntityFeature
+from homeassistant.components.alarm_control_panel import (
+    AlarmControlPanelEntity,
+    AlarmControlPanelEntityFeature,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     STATE_ALARM_ARMED_AWAY,
@@ -15,6 +18,7 @@ from homeassistant.const import (
     STATE_ALARM_DISARMED,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import DOMAIN
@@ -39,13 +43,15 @@ async def async_setup_entry(
     )
 
 
-class ProsegurAlarm(alarm.AlarmControlPanelEntity):
+class ProsegurAlarm(AlarmControlPanelEntity):
     """Representation of a Prosegur alarm status."""
 
     _attr_supported_features = (
         AlarmControlPanelEntityFeature.ARM_AWAY
         | AlarmControlPanelEntityFeature.ARM_HOME
     )
+    _attr_has_entity_name = True
+    _attr_name = None
     _installation: Installation
 
     def __init__(self, contract: str, auth: Auth) -> None:
@@ -56,14 +62,21 @@ class ProsegurAlarm(alarm.AlarmControlPanelEntity):
         self._auth = auth
 
         self._attr_code_arm_required = False
-        self._attr_name = f"contract {self.contract}"
-        self._attr_unique_id = self.contract
+        self._attr_unique_id = contract
+
+        self._attr_device_info = DeviceInfo(
+            name=f"Contract {contract}",
+            manufacturer="Prosegur",
+            model="smart",
+            identifiers={(DOMAIN, contract)},
+            configuration_url="https://smart.prosegur.com",
+        )
 
     async def async_update(self) -> None:
         """Update alarm status."""
 
         try:
-            self._installation = await Installation.retrieve(self._auth)
+            self._installation = await Installation.retrieve(self._auth, self.contract)
         except ConnectionError as err:
             _LOGGER.error(err)
             self._attr_available = False

@@ -1,4 +1,5 @@
 """Xbox friends binary sensors."""
+
 from __future__ import annotations
 
 from functools import partial
@@ -9,9 +10,9 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import XboxUpdateCoordinator
 from .base_sensor import XboxBaseSensorEntity
 from .const import DOMAIN
+from .coordinator import XboxUpdateCoordinator
 
 PRESENCE_ATTRIBUTES = ["online", "in_party", "in_game", "in_multiplayer"]
 
@@ -62,8 +63,7 @@ def async_update_friends(
         ]
         new_entities = new_entities + current[xuid]
 
-    if new_entities:
-        async_add_entities(new_entities)
+    async_add_entities(new_entities)
 
     # Process deleted favorites, remove them from Home Assistant
     for xuid in current_ids - new_ids:

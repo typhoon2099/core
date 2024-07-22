@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Generic, TypeVar, Union
-
 from pydeconz.models.deconz_device import DeconzDevice as PydeconzDevice
 from pydeconz.models.group import Group as PydeconzGroup
 from pydeconz.models.light import LightBase as PydeconzLightBase
@@ -11,25 +9,20 @@ from pydeconz.models.scene import Scene as PydeconzScene
 from pydeconz.models.sensor import SensorBase as PydeconzSensorBase
 
 from homeassistant.core import callback
-from homeassistant.helpers.device_registry import CONNECTION_ZIGBEE
+from homeassistant.helpers.device_registry import CONNECTION_ZIGBEE, DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers.entity import DeviceInfo, Entity
+from homeassistant.helpers.entity import Entity
 
 from .const import DOMAIN as DECONZ_DOMAIN
-from .gateway import DeconzGateway
+from .hub import DeconzHub
+from .util import serial_from_unique_id
 
-_DeviceT = TypeVar(
-    "_DeviceT",
-    bound=Union[
-        PydeconzGroup,
-        PydeconzLightBase,
-        PydeconzSensorBase,
-        PydeconzScene,
-    ],
+type _DeviceType = (
+    PydeconzGroup | PydeconzLightBase | PydeconzSensorBase | PydeconzScene
 )
 
 
-class DeconzBase(Generic[_DeviceT]):
+class DeconzBase[_DeviceT: _DeviceType]:
     """Common base for deconz entities and events."""
 
     unique_id_suffix: str | None = None
@@ -37,11 +30,11 @@ class DeconzBase(Generic[_DeviceT]):
     def __init__(
         self,
         device: _DeviceT,
-        gateway: DeconzGateway,
+        hub: DeconzHub,
     ) -> None:
         """Set up device and add update callback to get data from websocket."""
         self._device: _DeviceT = device
-        self.gateway = gateway
+        self.hub = hub
 
     @property
     def unique_id(self) -> str:
@@ -55,9 +48,7 @@ class DeconzBase(Generic[_DeviceT]):
     def serial(self) -> str | None:
         """Return a serial number for this device."""
         assert isinstance(self._device, PydeconzDevice)
-        if not self._device.unique_id or self._device.unique_id.count(":") != 7:
-            return None
-        return self._device.unique_id.split("-", 1)[0]
+        return serial_from_unique_id(self._device.unique_id)
 
     @property
     def device_info(self) -> DeviceInfo | None:
@@ -73,11 +64,11 @@ class DeconzBase(Generic[_DeviceT]):
             model=self._device.model_id,
             name=self._device.name,
             sw_version=self._device.software_version,
-            via_device=(DECONZ_DOMAIN, self.gateway.api.config.bridge_id),
+            via_device=(DECONZ_DOMAIN, self.hub.api.config.bridge_id),
         )
 
 
-class DeconzDevice(DeconzBase[_DeviceT], Entity):
+class DeconzDevice[_DeviceT: _DeviceType](DeconzBase[_DeviceT], Entity):
     """Representation of a deCONZ device."""
 
     _attr_should_poll = False
@@ -91,11 +82,11 @@ class DeconzDevice(DeconzBase[_DeviceT], Entity):
     def __init__(
         self,
         device: _DeviceT,
-        gateway: DeconzGateway,
+        hub: DeconzHub,
     ) -> None:
         """Set up device and add update callback to get data from websocket."""
-        super().__init__(device, gateway)
-        self.gateway.entities[self.TYPE].add(self.unique_id)
+        super().__init__(device, hub)
+        self.hub.entities[self.TYPE].add(self.unique_id)
 
         self._attr_name = self._device.name
         if self._name_suffix is not None:
@@ -109,11 +100,11 @@ class DeconzDevice(DeconzBase[_DeviceT], Entity):
     async def async_added_to_hass(self) -> None:
         """Subscribe to device events."""
         self._device.register_callback(self.async_update_callback)
-        self.gateway.deconz_ids[self.entity_id] = self._device.deconz_id
+        self.hub.deconz_ids[self.entity_id] = self._device.deconz_id
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
-                self.gateway.signal_reachable,
+                self.hub.signal_reachable,
                 self.async_update_connection_state,
             )
         )
@@ -121,8 +112,8 @@ class DeconzDevice(DeconzBase[_DeviceT], Entity):
     async def async_will_remove_from_hass(self) -> None:
         """Disconnect device object when removed."""
         self._device.remove_callback(self.async_update_callback)
-        del self.gateway.deconz_ids[self.entity_id]
-        self.gateway.entities[self.TYPE].remove(self.unique_id)
+        del self.hub.deconz_ids[self.entity_id]
+        self.hub.entities[self.TYPE].remove(self.unique_id)
 
     @callback
     def async_update_connection_state(self) -> None:
@@ -132,12 +123,11 @@ class DeconzDevice(DeconzBase[_DeviceT], Entity):
     @callback
     def async_update_callback(self) -> None:
         """Update the device's state."""
-        if self.gateway.ignore_state_updates:
+        if self.hub.ignore_state_updates:
             return
 
-        if (
-            self._update_keys is not None
-            and not self._device.changed_keys.intersection(self._update_keys)
+        if self._update_keys is not None and not self._device.changed_keys.intersection(
+            self._update_keys
         ):
             return
 
@@ -147,8 +137,8 @@ class DeconzDevice(DeconzBase[_DeviceT], Entity):
     def available(self) -> bool:
         """Return True if device is available."""
         if isinstance(self._device, PydeconzScene):
-            return self.gateway.available
-        return self.gateway.available and self._device.reachable  # type: ignore[union-attr]
+            return self.hub.available
+        return self.hub.available and self._device.reachable  # type: ignore[union-attr]
 
 
 class DeconzSceneMixin(DeconzDevice[PydeconzScene]):
@@ -159,23 +149,23 @@ class DeconzSceneMixin(DeconzDevice[PydeconzScene]):
     def __init__(
         self,
         device: PydeconzScene,
-        gateway: DeconzGateway,
+        hub: DeconzHub,
     ) -> None:
         """Set up a scene."""
-        super().__init__(device, gateway)
+        super().__init__(device, hub)
 
-        self.group = self.gateway.api.groups[device.group_id]
+        self.group = self.hub.api.groups[device.group_id]
 
         self._attr_name = device.name
         self._group_identifier = self.get_parent_identifier()
 
     def get_device_identifier(self) -> str:
         """Describe a unique identifier for this scene."""
-        return f"{self.gateway.bridgeid}{self._device.deconz_id}"
+        return f"{self.hub.bridgeid}{self._device.deconz_id}"
 
     def get_parent_identifier(self) -> str:
         """Describe a unique identifier for group this scene belongs to."""
-        return f"{self.gateway.bridgeid}-{self.group.deconz_id}"
+        return f"{self.hub.bridgeid}-{self.group.deconz_id}"
 
     @property
     def unique_id(self) -> str:
@@ -190,5 +180,5 @@ class DeconzSceneMixin(DeconzDevice[PydeconzScene]):
             manufacturer="Dresden Elektronik",
             model="deCONZ group",
             name=self.group.name,
-            via_device=(DECONZ_DOMAIN, self.gateway.api.config.bridge_id),
+            via_device=(DECONZ_DOMAIN, self.hub.api.config.bridge_id),
         )

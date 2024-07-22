@@ -1,4 +1,5 @@
 """Fixtures for IntelliFire integration tests."""
+
 from collections.abc import Generator
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
@@ -7,7 +8,7 @@ import pytest
 
 
 @pytest.fixture
-def mock_setup_entry() -> Generator[AsyncMock, None, None]:
+def mock_setup_entry() -> Generator[AsyncMock]:
     """Mock setting up a config entry."""
     with patch(
         "homeassistant.components.intellifire.async_setup_entry", return_value=True
@@ -15,8 +16,8 @@ def mock_setup_entry() -> Generator[AsyncMock, None, None]:
         yield mock_setup
 
 
-@pytest.fixture()
-def mock_fireplace_finder_none() -> Generator[None, MagicMock, None]:
+@pytest.fixture
+def mock_fireplace_finder_none() -> Generator[MagicMock]:
     """Mock fireplace finder."""
     mock_found_fireplaces = Mock()
     mock_found_fireplaces.ips = []
@@ -26,8 +27,8 @@ def mock_fireplace_finder_none() -> Generator[None, MagicMock, None]:
         yield mock_found_fireplaces
 
 
-@pytest.fixture()
-def mock_fireplace_finder_single() -> Generator[None, MagicMock, None]:
+@pytest.fixture
+def mock_fireplace_finder_single() -> Generator[MagicMock]:
     """Mock fireplace finder."""
     mock_found_fireplaces = Mock()
     mock_found_fireplaces.ips = ["192.168.1.69"]
@@ -38,7 +39,7 @@ def mock_fireplace_finder_single() -> Generator[None, MagicMock, None]:
 
 
 @pytest.fixture
-def mock_intellifire_config_flow() -> Generator[None, MagicMock, None]:
+def mock_intellifire_config_flow() -> Generator[MagicMock]:
     """Return a mocked IntelliFire client."""
     data_mock = Mock()
     data_mock.serial = "12345"

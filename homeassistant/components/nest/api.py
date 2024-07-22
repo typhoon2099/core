@@ -57,7 +57,7 @@ class AsyncConfigEntryAuth(AbstractAuth):
         # even when it is expired to fully hand off this responsibility and
         # know it is working at startup (then if not, fail loudly).
         token = self._oauth_session.token
-        creds = Credentials(
+        creds = Credentials(  # type: ignore[no-untyped-call]
             token=token["access_token"],
             refresh_token=token["refresh_token"],
             token_uri=OAUTH2_TOKEN,
@@ -92,7 +92,7 @@ class AccessTokenAuthImpl(AbstractAuth):
 
     async def async_get_creds(self) -> Credentials:
         """Return an OAuth credential for Pub/Sub Subscriber."""
-        return Credentials(
+        return Credentials(  # type: ignore[no-untyped-call]
             token=self._access_token,
             token_uri=OAUTH2_TOKEN,
             scopes=SDM_SCOPES,
@@ -111,7 +111,7 @@ async def new_subscriber(
     if not isinstance(
         implementation, config_entry_oauth2_flow.LocalOAuth2Implementation
     ):
-        raise ValueError(f"Unexpected auth implementation {implementation}")
+        raise TypeError(f"Unexpected auth implementation {implementation}")
     if not (subscriber_id := entry.data.get(CONF_SUBSCRIBER_ID)):
         raise ValueError("Configuration option 'subscriber_id' missing")
     auth = AsyncConfigEntryAuth(

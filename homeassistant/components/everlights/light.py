@@ -1,4 +1,5 @@
 """Support for EverLights lights."""
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -12,7 +13,7 @@ from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
     ATTR_EFFECT,
     ATTR_HS_COLOR,
-    PLATFORM_SCHEMA,
+    PLATFORM_SCHEMA as LIGHT_PLATFORM_SCHEMA,
     ColorMode,
     LightEntity,
     LightEntityFeature,
@@ -30,7 +31,7 @@ _LOGGER = logging.getLogger(__name__)
 
 SCAN_INTERVAL = timedelta(minutes=1)
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+PLATFORM_SCHEMA = LIGHT_PLATFORM_SCHEMA.extend(
     {vol.Required(CONF_HOSTS): vol.All(cv.ensure_list, [cv.string])}
 )
 
@@ -65,9 +66,8 @@ async def async_setup_platform(
         except pyeverlights.ConnectionError as err:
             raise PlatformNotReady from err
 
-        else:
-            lights.append(EverLightsLight(api, pyeverlights.ZONE_1, status, effects))
-            lights.append(EverLightsLight(api, pyeverlights.ZONE_2, status, effects))
+        lights.append(EverLightsLight(api, pyeverlights.ZONE_1, status, effects))
+        lights.append(EverLightsLight(api, pyeverlights.ZONE_2, status, effects))
 
     async_add_entities(lights)
 

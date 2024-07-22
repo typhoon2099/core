@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from switchbee.api import SwitchBeeDeviceOfflineError, SwitchBeeError
+from switchbee.api.central_unit import SwitchBeeDeviceOfflineError, SwitchBeeError
 from switchbee.device import ApiStateCommand, DeviceType, SwitchBeeDimmer
 
 from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode, LightEntity
@@ -71,7 +71,6 @@ class SwitchBeeLightEntity(SwitchBeeDeviceEntity[SwitchBeeDimmer], LightEntity):
         super()._handle_coordinator_update()
 
     def _update_attrs_from_coordinator(self) -> None:
-
         coordinator_device = self._get_coordinator_device()
         brightness = coordinator_device.brightness
 
@@ -101,15 +100,17 @@ class SwitchBeeLightEntity(SwitchBeeDeviceEntity[SwitchBeeDimmer], LightEntity):
             await self.coordinator.api.set_state(self._device.id, state)
         except (SwitchBeeError, SwitchBeeDeviceOfflineError) as exp:
             raise HomeAssistantError(
-                f"Failed to set {self.name} state {state}, {str(exp)}"
+                f"Failed to set {self.name} state {state}, {exp!s}"
             ) from exp
 
         if not isinstance(state, int):
-            # We just turned the light on, still don't know the last brightness known the Central Unit (yet)
-            # the brightness will be learned and updated in the next coordinator refresh
+            # We just turned the light on, still don't know the last brightness
+            # known the Central Unit (yet) the brightness will be learned
+            # and updated in the next coordinator refresh
             return
 
-        # update the coordinator data manually we already know the Central Unit brightness data for this light
+        # update the coordinator data manually we already know the Central Unit
+        # brightness data for this light
         self._get_coordinator_device().brightness = state
         self.coordinator.async_set_updated_data(self.coordinator.data)
 
@@ -119,7 +120,7 @@ class SwitchBeeLightEntity(SwitchBeeDeviceEntity[SwitchBeeDimmer], LightEntity):
             await self.coordinator.api.set_state(self._device.id, ApiStateCommand.OFF)
         except (SwitchBeeError, SwitchBeeDeviceOfflineError) as exp:
             raise HomeAssistantError(
-                f"Failed to turn off {self._attr_name}, {str(exp)}"
+                f"Failed to turn off {self._attr_name}, {exp!s}"
             ) from exp
 
         # update the coordinator manually

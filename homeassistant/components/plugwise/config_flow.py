@@ -1,18 +1,22 @@
 """Config flow for Plugwise integration."""
+
 from __future__ import annotations
 
 from typing import Any
 
+from plugwise import Smile
 from plugwise.exceptions import (
+    ConnectionFailedError,
     InvalidAuthentication,
     InvalidSetupError,
-    PlugwiseException,
+    InvalidXMLError,
+    ResponseError,
+    UnsupportedDeviceError,
 )
-from plugwise.smile import Smile
 import voluptuous as vol
 
 from homeassistant.components.zeroconf import ZeroconfServiceInfo
-from homeassistant.config_entries import ConfigFlow
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import (
     CONF_BASE,
     CONF_HOST,
@@ -22,7 +26,6 @@ from homeassistant.const import (
     CONF_USERNAME,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
@@ -32,7 +35,6 @@ from .const import (
     DOMAIN,
     FLOW_SMILE,
     FLOW_STRETCH,
-    LOGGER,
     PW_TYPE,
     SMILE,
     STRETCH,
@@ -41,25 +43,26 @@ from .const import (
 )
 
 
-def _base_gw_schema(discovery_info):
+def _base_gw_schema(discovery_info: ZeroconfServiceInfo | None) -> vol.Schema:
     """Generate base schema for gateways."""
-    base_gw_schema = {}
+    base_gw_schema = vol.Schema({vol.Required(CONF_PASSWORD): str})
 
     if not discovery_info:
-        base_gw_schema[vol.Required(CONF_HOST)] = str
-        base_gw_schema[vol.Optional(CONF_PORT, default=DEFAULT_PORT)] = int
-        base_gw_schema[vol.Required(CONF_USERNAME, default=SMILE)] = vol.In(
-            {SMILE: FLOW_SMILE, STRETCH: FLOW_STRETCH}
+        base_gw_schema = base_gw_schema.extend(
+            {
+                vol.Required(CONF_HOST): str,
+                vol.Optional(CONF_PORT, default=DEFAULT_PORT): int,
+                vol.Required(CONF_USERNAME, default=SMILE): vol.In(
+                    {SMILE: FLOW_SMILE, STRETCH: FLOW_STRETCH}
+                ),
+            }
         )
 
-    base_gw_schema.update({vol.Required(CONF_PASSWORD): str})
-
-    return vol.Schema(base_gw_schema)
+    return base_gw_schema
 
 
 async def validate_gw_input(hass: HomeAssistant, data: dict[str, Any]) -> Smile:
-    """
-    Validate whether the user input allows us to connect to the gateway.
+    """Validate whether the user input allows us to connect to the gateway.
 
     Data has the keys from _base_gw_schema() with values provided by the user.
     """
@@ -86,7 +89,7 @@ class PlugwiseConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_zeroconf(
         self, discovery_info: ZeroconfServiceInfo
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Prepare configuration for a discovered Plugwise Smile."""
         self.discovery_info = discovery_info
         _properties = discovery_info.properties
@@ -103,7 +106,7 @@ class PlugwiseConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_PASSWORD: config_entry.data[CONF_PASSWORD],
                     },
                 )
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # noqa: BLE001
                 self._abort_if_unique_id_configured()
             else:
                 self._abort_if_unique_id_configured(
@@ -153,7 +156,9 @@ class PlugwiseConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_PORT: discovery_info.port,
                     CONF_USERNAME: self._username,
                 },
-                "configuration_url": f"http://{discovery_info.host}:{discovery_info.port}",
+                "configuration_url": (
+                    f"http://{discovery_info.host}:{discovery_info.port}"
+                ),
                 "product": _product,
             }
         )
@@ -161,7 +166,7 @@ class PlugwiseConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle the initial step when using network/gateway setups."""
         errors = {}
 
@@ -173,14 +178,17 @@ class PlugwiseConfigFlow(ConfigFlow, domain=DOMAIN):
 
             try:
                 api = await validate_gw_input(self.hass, user_input)
-            except InvalidSetupError:
-                errors[CONF_BASE] = "invalid_setup"
+            except ConnectionFailedError:
+                errors[CONF_BASE] = "cannot_connect"
             except InvalidAuthentication:
                 errors[CONF_BASE] = "invalid_auth"
-            except PlugwiseException:
-                errors[CONF_BASE] = "cannot_connect"
-            except Exception:  # pylint: disable=broad-except
-                LOGGER.exception("Unexpected exception")
+            except InvalidSetupError:
+                errors[CONF_BASE] = "invalid_setup"
+            except (InvalidXMLError, ResponseError):
+                errors[CONF_BASE] = "response_error"
+            except UnsupportedDeviceError:
+                errors[CONF_BASE] = "unsupported"
+            except Exception:  # noqa: BLE001
                 errors[CONF_BASE] = "unknown"
             else:
                 await self.async_set_unique_id(

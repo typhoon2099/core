@@ -1,27 +1,73 @@
 """Support for Risco alarm zones."""
+
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
+from itertools import chain
 from typing import Any
 
-from pyrisco.common import Zone
+from pyrisco.cloud.zone import Zone as CloudZone
+from pyrisco.common import System
+from pyrisco.local.zone import Zone as LocalZone
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
+    BinarySensorEntityDescription,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_platform
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import LocalData, RiscoDataUpdateCoordinator, is_local
-from .const import DATA_COORDINATOR, DOMAIN
-from .entity import RiscoEntity, binary_sensor_unique_id
+from . import LocalData, is_local
+from .const import DATA_COORDINATOR, DOMAIN, SYSTEM_UPDATE_SIGNAL
+from .coordinator import RiscoDataUpdateCoordinator
+from .entity import RiscoCloudZoneEntity, RiscoLocalZoneEntity
 
-SERVICE_BYPASS_ZONE = "bypass_zone"
-SERVICE_UNBYPASS_ZONE = "unbypass_zone"
+SYSTEM_ENTITY_DESCRIPTIONS = [
+    BinarySensorEntityDescription(
+        key="low_battery_trouble",
+        translation_key="low_battery_trouble",
+        device_class=BinarySensorDeviceClass.BATTERY,
+    ),
+    BinarySensorEntityDescription(
+        key="ac_trouble",
+        translation_key="ac_trouble",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+    ),
+    BinarySensorEntityDescription(
+        key="monitoring_station_1_trouble",
+        translation_key="monitoring_station_1_trouble",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+    ),
+    BinarySensorEntityDescription(
+        key="monitoring_station_2_trouble",
+        translation_key="monitoring_station_2_trouble",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+    ),
+    BinarySensorEntityDescription(
+        key="monitoring_station_3_trouble",
+        translation_key="monitoring_station_3_trouble",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+    ),
+    BinarySensorEntityDescription(
+        key="phone_line_trouble",
+        translation_key="phone_line_trouble",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+    ),
+    BinarySensorEntityDescription(
+        key="clock_trouble",
+        translation_key="clock_trouble",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+    ),
+    BinarySensorEntityDescription(
+        key="box_tamper",
+        translation_key="box_tamper",
+        device_class=BinarySensorDeviceClass.TAMPER,
+    ),
+]
 
 
 async def async_setup_entry(
@@ -30,20 +76,26 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Risco alarm control panel."""
-    platform = entity_platform.async_get_current_platform()
-    platform.async_register_entity_service(SERVICE_BYPASS_ZONE, {}, "async_bypass_zone")
-    platform.async_register_entity_service(
-        SERVICE_UNBYPASS_ZONE, {}, "async_unbypass_zone"
-    )
-
     if is_local(config_entry):
         local_data: LocalData = hass.data[DOMAIN][config_entry.entry_id]
-        async_add_entities(
-            RiscoLocalBinarySensor(
-                local_data.system.id, zone_id, zone, local_data.zone_updates
-            )
+        zone_entities = (
+            entity
             for zone_id, zone in local_data.system.zones.items()
+            for entity in (
+                RiscoLocalBinarySensor(local_data.system.id, zone_id, zone),
+                RiscoLocalAlarmedBinarySensor(local_data.system.id, zone_id, zone),
+                RiscoLocalArmedBinarySensor(local_data.system.id, zone_id, zone),
+            )
         )
+
+        system_entities = (
+            RiscoSystemBinarySensor(
+                local_data.system.id, local_data.system.system, entity_description
+            )
+            for entity_description in SYSTEM_ENTITY_DESCRIPTIONS
+        )
+
+        async_add_entities(chain(system_entities, zone_entities))
     else:
         coordinator: RiscoDataUpdateCoordinator = hass.data[DOMAIN][
             config_entry.entry_id
@@ -54,91 +106,33 @@ async def async_setup_entry(
         )
 
 
-class RiscoBinarySensor(BinarySensorEntity):
-    """Representation of a Risco zone as a binary sensor."""
+class RiscoCloudBinarySensor(RiscoCloudZoneEntity, BinarySensorEntity):
+    """Representation of a Risco cloud zone as a binary sensor."""
 
     _attr_device_class = BinarySensorDeviceClass.MOTION
+    _attr_name = None
 
-    def __init__(self, *, zone_id: int, zone: Zone, **kwargs: Any) -> None:
+    def __init__(
+        self, coordinator: RiscoDataUpdateCoordinator, zone_id: int, zone: CloudZone
+    ) -> None:
         """Init the zone."""
-        super().__init__(**kwargs)
-        self._zone_id = zone_id
-        self._zone = zone
-        self._attr_has_entity_name = True
-        self._attr_name = None
-
-    @property
-    def extra_state_attributes(self) -> Mapping[str, Any] | None:
-        """Return the state attributes."""
-        return {"zone_id": self._zone_id, "bypassed": self._zone.bypassed}
+        super().__init__(coordinator=coordinator, suffix="", zone_id=zone_id, zone=zone)
 
     @property
     def is_on(self) -> bool | None:
         """Return true if sensor is on."""
         return self._zone.triggered
 
-    async def async_bypass_zone(self) -> None:
-        """Bypass this zone."""
-        await self._bypass(True)
 
-    async def async_unbypass_zone(self) -> None:
-        """Unbypass this zone."""
-        await self._bypass(False)
-
-    async def _bypass(self, bypass: bool) -> None:
-        raise NotImplementedError
-
-
-class RiscoCloudBinarySensor(RiscoBinarySensor, RiscoEntity):
-    """Representation of a Risco cloud zone as a binary sensor."""
-
-    def __init__(
-        self, coordinator: RiscoDataUpdateCoordinator, zone_id: int, zone: Zone
-    ) -> None:
-        """Init the zone."""
-        super().__init__(zone_id=zone_id, zone=zone, coordinator=coordinator)
-        self._attr_unique_id = binary_sensor_unique_id(self._risco, zone_id)
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, self._attr_unique_id)},
-            manufacturer="Risco",
-            name=self._zone.name,
-        )
-
-    def _get_data_from_coordinator(self) -> None:
-        self._zone = self.coordinator.data.zones[self._zone_id]
-
-    async def _bypass(self, bypass: bool) -> None:
-        alarm = await self._risco.bypass_zone(self._zone_id, bypass)
-        self._zone = alarm.zones[self._zone_id]
-        self.async_write_ha_state()
-
-
-class RiscoLocalBinarySensor(RiscoBinarySensor):
+class RiscoLocalBinarySensor(RiscoLocalZoneEntity, BinarySensorEntity):
     """Representation of a Risco local zone as a binary sensor."""
 
-    _attr_should_poll = False
+    _attr_device_class = BinarySensorDeviceClass.MOTION
+    _attr_name = None
 
-    def __init__(
-        self,
-        system_id: str,
-        zone_id: int,
-        zone: Zone,
-        zone_updates: dict[int, Callable[[], Any]],
-    ) -> None:
+    def __init__(self, system_id: str, zone_id: int, zone: LocalZone) -> None:
         """Init the zone."""
-        super().__init__(zone_id=zone_id, zone=zone)
-        self._system_id = system_id
-        self._zone_updates = zone_updates
-        self._attr_unique_id = f"{system_id}_zone_{zone_id}_local"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, self._attr_unique_id)},
-            manufacturer="Risco",
-            name=self._zone.name,
-        )
-
-    async def async_added_to_hass(self) -> None:
-        """Subscribe to updates."""
-        self._zone_updates[self._zone_id] = self.async_write_ha_state
+        super().__init__(system_id=system_id, suffix="", zone_id=zone_id, zone=zone)
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:
@@ -148,5 +142,84 @@ class RiscoLocalBinarySensor(RiscoBinarySensor):
             "groups": self._zone.groups,
         }
 
-    async def _bypass(self, bypass: bool) -> None:
-        await self._zone.bypass(bypass)
+    @property
+    def is_on(self) -> bool | None:
+        """Return true if sensor is on."""
+        return self._zone.triggered
+
+
+class RiscoLocalAlarmedBinarySensor(RiscoLocalZoneEntity, BinarySensorEntity):
+    """Representation whether a zone in Risco local is currently triggering an alarm."""
+
+    _attr_translation_key = "alarmed"
+
+    def __init__(self, system_id: str, zone_id: int, zone: LocalZone) -> None:
+        """Init the zone."""
+        super().__init__(
+            system_id=system_id,
+            suffix="_alarmed",
+            zone_id=zone_id,
+            zone=zone,
+        )
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return true if sensor is on."""
+        return self._zone.alarmed
+
+
+class RiscoLocalArmedBinarySensor(RiscoLocalZoneEntity, BinarySensorEntity):
+    """Representation whether a zone in Risco local is currently armed."""
+
+    _attr_translation_key = "armed"
+
+    def __init__(self, system_id: str, zone_id: int, zone: LocalZone) -> None:
+        """Init the zone."""
+        super().__init__(
+            system_id=system_id,
+            suffix="_armed",
+            zone_id=zone_id,
+            zone=zone,
+        )
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return true if sensor is on."""
+        return self._zone.armed
+
+
+class RiscoSystemBinarySensor(BinarySensorEntity):
+    """Risco local system binary sensor class."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        system_id: str,
+        system: System,
+        entity_description: BinarySensorEntityDescription,
+    ) -> None:
+        """Init the sensor."""
+        self._system = system
+        self._property = entity_description.key
+        self._attr_unique_id = f"{system_id}_{self._property}"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, system_id)},
+            manufacturer="Risco",
+            name=system.name,
+        )
+        self.entity_description = entity_description
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to updates."""
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass, SYSTEM_UPDATE_SIGNAL, self.async_write_ha_state
+            )
+        )
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return true if sensor is on."""
+        return getattr(self._system, self._property)

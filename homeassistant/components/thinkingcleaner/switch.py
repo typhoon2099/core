@@ -1,4 +1,5 @@
 """Support for ThinkingCleaner switches."""
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -10,7 +11,7 @@ import voluptuous as vol
 
 from homeassistant import util
 from homeassistant.components.switch import (
-    PLATFORM_SCHEMA,
+    PLATFORM_SCHEMA as SWITCH_PLATFORM_SCHEMA,
     SwitchEntity,
     SwitchEntityDescription,
 )
@@ -41,7 +42,7 @@ SWITCH_TYPES: tuple[SwitchEntityDescription, ...] = (
     ),
 )
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({vol.Optional(CONF_HOST): cv.string})
+PLATFORM_SCHEMA = SWITCH_PLATFORM_SCHEMA.extend({vol.Optional(CONF_HOST): cv.string})
 
 
 def setup_platform(
@@ -75,7 +76,9 @@ def setup_platform(
 class ThinkingCleanerSwitch(SwitchEntity):
     """ThinkingCleaner Switch (dock, clean, find me)."""
 
-    def __init__(self, tc_object, update_devices, description: SwitchEntityDescription):
+    def __init__(
+        self, tc_object, update_devices, description: SwitchEntityDescription
+    ) -> None:
         """Initialize the ThinkingCleaner."""
         self.entity_description = description
 

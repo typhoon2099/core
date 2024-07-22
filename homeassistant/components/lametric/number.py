@@ -1,4 +1,5 @@
 """Support for LaMetric numbers."""
+
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
@@ -9,35 +10,41 @@ from demetriek import Device, LaMetricDevice
 
 from homeassistant.components.number import NumberEntity, NumberEntityDescription
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import PERCENTAGE, EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
 from .coordinator import LaMetricDataUpdateCoordinator
 from .entity import LaMetricEntity
+from .helpers import lametric_exception_handler
 
 
-@dataclass
-class LaMetricEntityDescriptionMixin:
-    """Mixin values for LaMetric entities."""
+@dataclass(frozen=True, kw_only=True)
+class LaMetricNumberEntityDescription(NumberEntityDescription):
+    """Class describing LaMetric number entities."""
 
     value_fn: Callable[[Device], int | None]
     set_value_fn: Callable[[LaMetricDevice, float], Awaitable[Any]]
 
 
-@dataclass
-class LaMetricNumberEntityDescription(
-    NumberEntityDescription, LaMetricEntityDescriptionMixin
-):
-    """Class describing LaMetric number entities."""
-
-
 NUMBERS = [
     LaMetricNumberEntityDescription(
+        key="brightness",
+        translation_key="brightness",
+        name="Brightness",
+        entity_category=EntityCategory.CONFIG,
+        native_step=1,
+        native_min_value=0,
+        native_max_value=100,
+        native_unit_of_measurement=PERCENTAGE,
+        value_fn=lambda device: device.display.brightness,
+        set_value_fn=lambda device, bri: device.display(brightness=int(bri)),
+    ),
+    LaMetricNumberEntityDescription(
         key="volume",
+        translation_key="volume",
         name="Volume",
-        icon="mdi:volume-high",
         entity_category=EntityCategory.CONFIG,
         native_step=1,
         native_min_value=0,
@@ -84,6 +91,7 @@ class LaMetricNumberEntity(LaMetricEntity, NumberEntity):
         """Return the number value."""
         return self.entity_description.value_fn(self.coordinator.data)
 
+    @lametric_exception_handler
     async def async_set_native_value(self, value: float) -> None:
         """Change to new number value."""
         await self.entity_description.set_value_fn(self.coordinator.lametric, value)

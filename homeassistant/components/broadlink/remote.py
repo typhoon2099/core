@@ -1,4 +1,5 @@
 """Support for Broadlink remotes."""
+
 import asyncio
 from base64 import b64encode
 from collections import defaultdict
@@ -39,7 +40,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.storage import Store
-from homeassistant.util import dt
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .entity import BroadlinkEntity
@@ -106,6 +107,9 @@ async def async_setup_entry(
 class BroadlinkRemote(BroadlinkEntity, RemoteEntity, RestoreEntity):
     """Representation of a Broadlink remote."""
 
+    _attr_has_entity_name = True
+    _attr_name = None
+
     def __init__(self, device, codes, flags):
         """Initialize the remote."""
         super().__init__(device)
@@ -116,7 +120,6 @@ class BroadlinkRemote(BroadlinkEntity, RemoteEntity, RestoreEntity):
         self._flags = defaultdict(int)
         self._lock = asyncio.Lock()
 
-        self._attr_name = f"{device.name} Remote"
         self._attr_is_on = True
         self._attr_supported_features = (
             RemoteEntityFeature.LEARN_COMMAND | RemoteEntityFeature.DELETE_COMMAND
@@ -146,7 +149,7 @@ class BroadlinkRemote(BroadlinkEntity, RemoteEntity, RestoreEntity):
                 try:
                     codes = self._codes[device][cmd]
                 except KeyError as err:
-                    raise ValueError(f"Command not found: {repr(cmd)}") from err
+                    raise ValueError(f"Command not found: {cmd!r}") from err
 
                 if isinstance(codes, list):
                     codes = codes[:]
@@ -157,7 +160,7 @@ class BroadlinkRemote(BroadlinkEntity, RemoteEntity, RestoreEntity):
                 try:
                     codes[idx] = data_packet(code)
                 except ValueError as err:
-                    raise ValueError(f"Invalid code: {repr(code)}") from err
+                    raise ValueError(f"Invalid code: {code!r}") from err
 
             code_list.append(codes)
         return code_list
@@ -329,8 +332,8 @@ class BroadlinkRemote(BroadlinkEntity, RemoteEntity, RestoreEntity):
         )
 
         try:
-            start_time = dt.utcnow()
-            while (dt.utcnow() - start_time) < LEARNING_TIMEOUT:
+            start_time = dt_util.utcnow()
+            while (dt_util.utcnow() - start_time) < LEARNING_TIMEOUT:
                 await asyncio.sleep(1)
                 try:
                     code = await device.async_request(device.api.check_data)
@@ -367,11 +370,14 @@ class BroadlinkRemote(BroadlinkEntity, RemoteEntity, RestoreEntity):
         )
 
         try:
-            start_time = dt.utcnow()
-            while (dt.utcnow() - start_time) < LEARNING_TIMEOUT:
+            start_time = dt_util.utcnow()
+            while (dt_util.utcnow() - start_time) < LEARNING_TIMEOUT:
                 await asyncio.sleep(1)
-                found = await device.async_request(device.api.check_frequency)
-                if found:
+                is_found, frequency = await device.async_request(
+                    device.api.check_frequency
+                )
+                if is_found:
+                    _LOGGER.info("Radiofrequency detected: %s MHz", frequency)
                     break
             else:
                 await device.async_request(device.api.cancel_sweep_frequency)
@@ -402,8 +408,8 @@ class BroadlinkRemote(BroadlinkEntity, RemoteEntity, RestoreEntity):
         )
 
         try:
-            start_time = dt.utcnow()
-            while (dt.utcnow() - start_time) < LEARNING_TIMEOUT:
+            start_time = dt_util.utcnow()
+            while (dt_util.utcnow() - start_time) < LEARNING_TIMEOUT:
                 await asyncio.sleep(1)
                 try:
                     code = await device.async_request(device.api.check_data)
@@ -442,7 +448,7 @@ class BroadlinkRemote(BroadlinkEntity, RemoteEntity, RestoreEntity):
         try:
             codes = self._codes[subdevice]
         except KeyError as err:
-            err_msg = f"Device not found: {repr(subdevice)}"
+            err_msg = f"Device not found: {subdevice!r}"
             _LOGGER.error("Failed to call %s. %s", service, err_msg)
             raise ValueError(err_msg) from err
 
@@ -455,9 +461,9 @@ class BroadlinkRemote(BroadlinkEntity, RemoteEntity, RestoreEntity):
 
         if cmds_not_found:
             if len(cmds_not_found) == 1:
-                err_msg = f"Command not found: {repr(cmds_not_found[0])}"
+                err_msg = f"Command not found: {cmds_not_found[0]!r}"
             else:
-                err_msg = f"Commands not found: {repr(cmds_not_found)}"
+                err_msg = f"Commands not found: {cmds_not_found!r}"
 
             if len(cmds_not_found) == len(commands):
                 _LOGGER.error("Failed to call %s. %s", service, err_msg)

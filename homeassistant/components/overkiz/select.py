@@ -1,4 +1,5 @@
 """Support for Overkiz select."""
+
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
@@ -8,26 +9,20 @@ from pyoverkiz.enums import OverkizCommand, OverkizCommandParam, OverkizState
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import HomeAssistantOverkizData
 from .const import DOMAIN, IGNORED_OVERKIZ_DEVICES
-from .entity import OverkizDescriptiveEntity, OverkizDeviceClass
+from .entity import OverkizDescriptiveEntity
 
 
-@dataclass
-class OverkizSelectDescriptionMixin:
-    """Define an entity description mixin for select entities."""
-
-    options: list[str | OverkizCommandParam]
-    select_option: Callable[[str, Callable[..., Awaitable[None]]], Awaitable[None]]
-
-
-@dataclass
-class OverkizSelectDescription(SelectEntityDescription, OverkizSelectDescriptionMixin):
+@dataclass(frozen=True, kw_only=True)
+class OverkizSelectDescription(SelectEntityDescription):
     """Class to describe an Overkiz select entity."""
+
+    select_option: Callable[[str, Callable[..., Awaitable[None]]], Awaitable[None]]
 
 
 def _select_option_open_closed_pedestrian(
@@ -39,6 +34,19 @@ def _select_option_open_closed_pedestrian(
             OverkizCommandParam.CLOSED: OverkizCommand.CLOSE,
             OverkizCommandParam.OPEN: OverkizCommand.OPEN,
             OverkizCommandParam.PEDESTRIAN: OverkizCommand.SET_PEDESTRIAN_POSITION,
+        }[OverkizCommandParam(option)]
+    )
+
+
+def _select_option_open_closed_partial(
+    option: str, execute_command: Callable[..., Awaitable[None]]
+) -> Awaitable[None]:
+    """Change the selected option for Open/Closed/Partial."""
+    return execute_command(
+        {
+            OverkizCommandParam.CLOSED: OverkizCommand.CLOSE,
+            OverkizCommandParam.OPEN: OverkizCommand.OPEN,
+            OverkizCommandParam.PARTIAL: OverkizCommand.PARTIAL_POSITION,
         }[OverkizCommandParam(option)]
     )
 
@@ -72,7 +80,19 @@ SELECT_DESCRIPTIONS: list[OverkizSelectDescription] = [
             OverkizCommandParam.CLOSED,
         ],
         select_option=_select_option_open_closed_pedestrian,
-        device_class=OverkizDeviceClass.OPEN_CLOSED_PEDESTRIAN,
+        translation_key="open_closed_pedestrian",
+    ),
+    OverkizSelectDescription(
+        key=OverkizState.CORE_OPEN_CLOSED_PARTIAL,
+        name="Position",
+        icon="mdi:content-save-cog",
+        options=[
+            OverkizCommandParam.OPEN,
+            OverkizCommandParam.PARTIAL,
+            OverkizCommandParam.CLOSED,
+        ],
+        select_option=_select_option_open_closed_partial,
+        translation_key="open_closed_partial",
     ),
     OverkizSelectDescription(
         key=OverkizState.IO_MEMORIZED_SIMPLE_VOLUME,
@@ -81,7 +101,7 @@ SELECT_DESCRIPTIONS: list[OverkizSelectDescription] = [
         options=[OverkizCommandParam.STANDARD, OverkizCommandParam.HIGHEST],
         select_option=_select_option_memorized_simple_volume,
         entity_category=EntityCategory.CONFIG,
-        device_class=OverkizDeviceClass.MEMORIZED_SIMPLE_VOLUME,
+        translation_key="memorized_simple_volume",
     ),
     # SomfyHeatingTemperatureInterface
     OverkizSelectDescription(
@@ -123,15 +143,15 @@ async def async_setup_entry(
         ):
             continue
 
-        for state in device.definition.states:
-            if description := SUPPORTED_STATES.get(state.qualified_name):
-                entities.append(
-                    OverkizSelect(
-                        device.device_url,
-                        data.coordinator,
-                        description,
-                    )
-                )
+        entities.extend(
+            OverkizSelect(
+                device.device_url,
+                data.coordinator,
+                description,
+            )
+            for state in device.definition.states
+            if (description := SUPPORTED_STATES.get(state.qualified_name))
+        )
 
     async_add_entities(entities)
 
@@ -148,11 +168,6 @@ class OverkizSelect(OverkizDescriptiveEntity, SelectEntity):
             return str(state.value)
 
         return None
-
-    @property
-    def options(self) -> list[str]:
-        """Return a set of selectable options."""
-        return self.entity_description.options
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""

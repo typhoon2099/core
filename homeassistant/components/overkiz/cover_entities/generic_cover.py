@@ -1,7 +1,7 @@
 """Base class for Overkiz covers, shutters, awnings, etc."""
+
 from __future__ import annotations
 
-from collections.abc import Mapping
 from typing import Any, cast
 
 from pyoverkiz.enums import OverkizCommand, OverkizCommandParam, OverkizState
@@ -27,15 +27,19 @@ COMMANDS_STOP_TILT: list[OverkizCommand] = [
 COMMANDS_OPEN: list[OverkizCommand] = [
     OverkizCommand.OPEN,
     OverkizCommand.UP,
-    OverkizCommand.CYCLE,
 ]
-COMMANDS_OPEN_TILT: list[OverkizCommand] = [OverkizCommand.OPEN_SLATS]
+COMMANDS_OPEN_TILT: list[OverkizCommand] = [
+    OverkizCommand.OPEN_SLATS,
+    OverkizCommand.TILT_DOWN,
+]
 COMMANDS_CLOSE: list[OverkizCommand] = [
     OverkizCommand.CLOSE,
     OverkizCommand.DOWN,
-    OverkizCommand.CYCLE,
 ]
-COMMANDS_CLOSE_TILT: list[OverkizCommand] = [OverkizCommand.CLOSE_SLATS]
+COMMANDS_CLOSE_TILT: list[OverkizCommand] = [
+    OverkizCommand.CLOSE_SLATS,
+    OverkizCommand.TILT_UP,
+]
 
 COMMANDS_SET_TILT_POSITION: list[OverkizCommand] = [OverkizCommand.SET_ORIENTATION]
 
@@ -118,20 +122,9 @@ class OverkizGenericCover(OverkizEntity, CoverEntity):
         )
 
     @property
-    def extra_state_attributes(self) -> Mapping[str, Any] | None:
-        """Return the device state attributes."""
-        attr = super().extra_state_attributes or {}
-
-        # Obstruction Detected attribute is used by HomeKit
-        if self.executor.has_state(OverkizState.IO_PRIORITY_LOCK_LEVEL):
-            return {**attr, **{ATTR_OBSTRUCTION_DETECTED: True}}
-
-        return attr
-
-    @property
-    def supported_features(self) -> int:
+    def supported_features(self) -> CoverEntityFeature:
         """Flag supported features."""
-        supported_features = 0
+        supported_features = CoverEntityFeature(0)
 
         if self.executor.has_command(*COMMANDS_OPEN_TILT):
             supported_features |= CoverEntityFeature.OPEN_TILT

@@ -1,12 +1,12 @@
 """Test the UniFi Protect media_player platform."""
-# pylint: disable=protected-access
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from pyunifiprotect.data import Camera
-from pyunifiprotect.exceptions import StreamError
+from uiprotect.data import Camera
+from uiprotect.exceptions import StreamError
 
 from homeassistant.components.media_player import (
     ATTR_MEDIA_CONTENT_TYPE,
@@ -36,7 +36,7 @@ from .utils import (
 
 async def test_media_player_camera_remove(
     hass: HomeAssistant, ufp: MockUFPFixture, doorbell: Camera
-):
+) -> None:
     """Test removing and re-adding a light device."""
 
     await init_entry(hass, ufp, [doorbell])
@@ -49,10 +49,11 @@ async def test_media_player_camera_remove(
 
 async def test_media_player_setup(
     hass: HomeAssistant,
+    entity_registry: er.EntityRegistry,
     ufp: MockUFPFixture,
     doorbell: Camera,
     unadopted_camera: Camera,
-):
+) -> None:
     """Test media_player entity setup."""
 
     await init_entry(hass, ufp, [doorbell, unadopted_camera])
@@ -61,7 +62,6 @@ async def test_media_player_setup(
     unique_id = f"{doorbell.mac}_speaker"
     entity_id = "media_player.test_camera_speaker"
 
-    entity_registry = er.async_get(hass)
     entity = entity_registry.async_get(entity_id)
     assert entity
     assert entity.unique_id == unique_id
@@ -82,7 +82,7 @@ async def test_media_player_update(
     ufp: MockUFPFixture,
     doorbell: Camera,
     unadopted_camera: Camera,
-):
+) -> None:
     """Test media_player entity update."""
 
     await init_entry(hass, ufp, [doorbell, unadopted_camera])
@@ -110,7 +110,7 @@ async def test_media_player_set_volume(
     ufp: MockUFPFixture,
     doorbell: Camera,
     unadopted_camera: Camera,
-):
+) -> None:
     """Test media_player entity test set_volume_level."""
 
     await init_entry(hass, ufp, [doorbell, unadopted_camera])
@@ -134,7 +134,7 @@ async def test_media_player_stop(
     ufp: MockUFPFixture,
     doorbell: Camera,
     unadopted_camera: Camera,
-):
+) -> None:
     """Test media_player entity test media_stop."""
 
     await init_entry(hass, ufp, [doorbell, unadopted_camera])
@@ -167,7 +167,7 @@ async def test_media_player_play(
     ufp: MockUFPFixture,
     doorbell: Camera,
     unadopted_camera: Camera,
-):
+) -> None:
     """Test media_player entity test play_media."""
 
     await init_entry(hass, ufp, [doorbell, unadopted_camera])
@@ -202,7 +202,7 @@ async def test_media_player_play_media_source(
     ufp: MockUFPFixture,
     doorbell: Camera,
     unadopted_camera: Camera,
-):
+) -> None:
     """Test media_player entity test play_media."""
 
     await init_entry(hass, ufp, [doorbell, unadopted_camera])
@@ -241,7 +241,7 @@ async def test_media_player_play_invalid(
     ufp: MockUFPFixture,
     doorbell: Camera,
     unadopted_camera: Camera,
-):
+) -> None:
     """Test media_player entity test play_media, not music."""
 
     await init_entry(hass, ufp, [doorbell, unadopted_camera])
@@ -270,7 +270,7 @@ async def test_media_player_play_error(
     ufp: MockUFPFixture,
     doorbell: Camera,
     unadopted_camera: Camera,
-):
+) -> None:
     """Test media_player entity test play_media, not music."""
 
     await init_entry(hass, ufp, [doorbell, unadopted_camera])

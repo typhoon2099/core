@@ -1,7 +1,14 @@
 """Property update methods and schemas."""
 
+from typing import Any
+
 from pyinsteon import devices
-from pyinsteon.config import RADIO_BUTTON_GROUPS, RAMP_RATE_IN_SEC, get_usable_value
+from pyinsteon.config import (
+    LOAD_BUTTON,
+    RADIO_BUTTON_GROUPS,
+    RAMP_RATE_IN_SEC,
+    get_usable_value,
+)
 from pyinsteon.constants import (
     RAMP_RATES_SEC,
     PropertyType,
@@ -67,19 +74,22 @@ def _read_only_schema(name, value):
 
 
 def get_schema(prop, name, groups):
-    """Return the correct shema type."""
+    """Return the correct schema type."""
     if prop.is_read_only:
         return _read_only_schema(name, prop.value)
     if name == RAMP_RATE_IN_SEC:
         return _list_schema(name, RAMP_RATE_LIST)
     if name == RADIO_BUTTON_GROUPS:
-        button_list = {str(group): groups[group].name for group in groups if group != 1}
+        button_list = {str(group): groups[group].name for group in groups}
         return _multi_select_schema(name, button_list)
-    if prop.value_type == bool:
+    if name == LOAD_BUTTON:
+        button_list = {group: groups[group].name for group in groups}
+        return _list_schema(name, button_list)
+    if prop.value_type is bool:
         return _bool_schema(name)
-    if prop.value_type == int:
+    if prop.value_type is int:
         return _byte_schema(name)
-    if prop.value_type == float:
+    if prop.value_type is float:
         return _float_schema(name)
     if prop.value_type == ToggleMode:
         return _list_schema(name, TOGGLE_MODES)
@@ -129,8 +139,7 @@ def property_to_dict(prop):
     modified = value == prop.new_value
     if prop.value_type in [ToggleMode, RelayMode] or prop.name == RAMP_RATE_IN_SEC:
         value = str(value).lower()
-    prop_dict = {"name": prop.name, "value": value, "modified": modified}
-    return prop_dict
+    return {"name": prop.name, "value": value, "modified": modified}
 
 
 def update_property(device, prop_name, value):
@@ -158,7 +167,7 @@ def update_property(device, prop_name, value):
 async def websocket_get_properties(
     hass: HomeAssistant,
     connection: websocket_api.connection.ActiveConnection,
-    msg: dict,
+    msg: dict[str, Any],
 ) -> None:
     """Add the default All-Link Database records for an Insteon device."""
     if not (device := devices[msg[DEVICE_ADDRESS]]):
@@ -183,7 +192,7 @@ async def websocket_get_properties(
 async def websocket_change_properties_record(
     hass: HomeAssistant,
     connection: websocket_api.connection.ActiveConnection,
-    msg: dict,
+    msg: dict[str, Any],
 ) -> None:
     """Add the default All-Link Database records for an Insteon device."""
     if not (device := devices[msg[DEVICE_ADDRESS]]):
@@ -205,7 +214,7 @@ async def websocket_change_properties_record(
 async def websocket_write_properties(
     hass: HomeAssistant,
     connection: websocket_api.connection.ActiveConnection,
-    msg: dict,
+    msg: dict[str, Any],
 ) -> None:
     """Add the default All-Link Database records for an Insteon device."""
     if not (device := devices[msg[DEVICE_ADDRESS]]):
@@ -235,7 +244,7 @@ async def websocket_write_properties(
 async def websocket_load_properties(
     hass: HomeAssistant,
     connection: websocket_api.connection.ActiveConnection,
-    msg: dict,
+    msg: dict[str, Any],
 ) -> None:
     """Add the default All-Link Database records for an Insteon device."""
     if not (device := devices[msg[DEVICE_ADDRESS]]):
@@ -266,7 +275,7 @@ async def websocket_load_properties(
 async def websocket_reset_properties(
     hass: HomeAssistant,
     connection: websocket_api.connection.ActiveConnection,
-    msg: dict,
+    msg: dict[str, Any],
 ) -> None:
     """Add the default All-Link Database records for an Insteon device."""
     if not (device := devices[msg[DEVICE_ADDRESS]]):

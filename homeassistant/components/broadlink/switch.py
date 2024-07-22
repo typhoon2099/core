@@ -1,4 +1,5 @@
 """Support for Broadlink switches."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -9,7 +10,7 @@ from broadlink.exceptions import BroadlinkException
 import voluptuous as vol
 
 from homeassistant.components.switch import (
-    PLATFORM_SCHEMA,
+    PLATFORM_SCHEMA as SWITCH_PLATFORM_SCHEMA,
     SwitchDeviceClass,
     SwitchEntity,
 )
@@ -55,7 +56,7 @@ PLATFORM_SCHEMA = vol.All(
     cv.deprecated(CONF_SLOTS),
     cv.deprecated(CONF_TIMEOUT),
     cv.deprecated(CONF_TYPE),
-    PLATFORM_SCHEMA.extend(
+    SWITCH_PLATFORM_SCHEMA.extend(
         {
             vol.Required(CONF_MAC): mac_address,
             vol.Optional(CONF_HOST): cv.string,
@@ -128,7 +129,7 @@ async def async_setup_entry(
     elif device.api.type == "BG1":
         switches.extend(BroadlinkBG1Slot(device, slot) for slot in range(1, 3))
 
-    elif device.api.type == "MP1":
+    elif device.api.type in {"MP1", "MP1S"}:
         switches.extend(BroadlinkMP1Slot(device, slot) for slot in range(1, 5))
 
     async_add_entities(switches)
@@ -145,7 +146,6 @@ class BroadlinkSwitch(BroadlinkEntity, SwitchEntity, RestoreEntity, ABC):
         super().__init__(device)
         self._command_on = command_on
         self._command_off = command_off
-        self._attr_name = f"{device.name} Switch"
 
     async def async_added_to_hass(self) -> None:
         """Call when the switch is added to hass."""
@@ -198,6 +198,8 @@ class BroadlinkRMSwitch(BroadlinkSwitch):
 class BroadlinkSP1Switch(BroadlinkSwitch):
     """Representation of a Broadlink SP1 switch."""
 
+    _attr_has_entity_name = True
+
     def __init__(self, device):
         """Initialize the switch."""
         super().__init__(device, 1, 0)
@@ -219,6 +221,8 @@ class BroadlinkSP2Switch(BroadlinkSP1Switch):
     """Representation of a Broadlink SP2 switch."""
 
     _attr_assumed_state = False
+    _attr_has_entity_name = True
+    _attr_name = None
 
     def __init__(self, device, *args, **kwargs):
         """Initialize the switch."""
@@ -234,13 +238,14 @@ class BroadlinkMP1Slot(BroadlinkSwitch):
     """Representation of a Broadlink MP1 slot."""
 
     _attr_assumed_state = False
+    _attr_has_entity_name = True
 
     def __init__(self, device, slot):
         """Initialize the switch."""
         super().__init__(device, 1, 0)
         self._slot = slot
         self._attr_is_on = self._coordinator.data[f"s{slot}"]
-        self._attr_name = f"{device.name} S{slot}"
+        self._attr_name = f"S{slot}"
         self._attr_unique_id = f"{device.unique_id}-s{slot}"
 
     def _update_state(self, data):
@@ -263,6 +268,7 @@ class BroadlinkBG1Slot(BroadlinkSwitch):
     """Representation of a Broadlink BG1 slot."""
 
     _attr_assumed_state = False
+    _attr_has_entity_name = True
 
     def __init__(self, device, slot):
         """Initialize the switch."""
@@ -270,7 +276,7 @@ class BroadlinkBG1Slot(BroadlinkSwitch):
         self._slot = slot
         self._attr_is_on = self._coordinator.data[f"pwr{slot}"]
 
-        self._attr_name = f"{device.name} S{slot}"
+        self._attr_name = f"S{slot}"
         self._attr_device_class = SwitchDeviceClass.OUTLET
         self._attr_unique_id = f"{device.unique_id}-s{slot}"
 

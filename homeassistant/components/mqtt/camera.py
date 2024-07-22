@@ -1,9 +1,10 @@
 """Camera that loads a picture from an MQTT topic."""
+
 from __future__ import annotations
 
 from base64 import b64decode
-import functools
 import logging
+from typing import TYPE_CHECKING
 
 import voluptuous as vol
 
@@ -18,15 +19,10 @@ from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 from . import subscription
 from .config import MQTT_BASE_SCHEMA
-from .const import CONF_ENCODING, CONF_QOS, CONF_TOPIC, DEFAULT_ENCODING
-from .debug_info import log_messages
-from .mixins import (
-    MQTT_ENTITY_COMMON_SCHEMA,
-    MqttEntity,
-    async_setup_entry_helper,
-    async_setup_platform_helper,
-    warn_for_legacy_schema,
-)
+from .const import CONF_TOPIC
+from .mixins import MqttEntity, async_setup_entity_entry_helper
+from .models import ReceiveMessage
+from .schemas import MQTT_ENTITY_COMMON_SCHEMA
 from .util import valid_subscribe_topic
 
 _LOGGER = logging.getLogger(__name__)
@@ -44,23 +40,9 @@ MQTT_CAMERA_ATTRIBUTES_BLOCKED = frozenset(
     }
 )
 
-
-# Using CONF_ENCODING to set b64 encoding for images is deprecated as of Home Assistant 2022.9
-# use CONF_IMAGE_ENCODING instead, support for the work-a-round will be removed with Home Assistant 2022.11
-def repair_legacy_encoding(config: ConfigType) -> ConfigType:
-    """Check incorrect deprecated config of image encoding."""
-    if config[CONF_ENCODING] == "b64":
-        config[CONF_IMAGE_ENCODING] = "b64"
-        config[CONF_ENCODING] = DEFAULT_ENCODING
-        _LOGGER.warning(
-            "Using the `encoding` parameter to set image encoding has been deprecated, use `image_encoding` instead"
-        )
-    return config
-
-
 PLATFORM_SCHEMA_BASE = MQTT_BASE_SCHEMA.extend(
     {
-        vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
+        vol.Optional(CONF_NAME): vol.Any(cv.string, None),
         vol.Required(CONF_TOPIC): valid_subscribe_topic,
         vol.Optional(CONF_IMAGE_ENCODING): "b64",
     }
@@ -68,34 +50,9 @@ PLATFORM_SCHEMA_BASE = MQTT_BASE_SCHEMA.extend(
 
 PLATFORM_SCHEMA_MODERN = vol.All(
     PLATFORM_SCHEMA_BASE.schema,
-    repair_legacy_encoding,
-)
-
-# Configuring MQTT Camera under the camera platform key is deprecated in HA Core 2022.6
-PLATFORM_SCHEMA = vol.All(
-    cv.PLATFORM_SCHEMA.extend(PLATFORM_SCHEMA_BASE.schema),
-    warn_for_legacy_schema(camera.DOMAIN),
-    repair_legacy_encoding,
 )
 
 DISCOVERY_SCHEMA = PLATFORM_SCHEMA_BASE.extend({}, extra=vol.REMOVE_EXTRA)
-
-
-async def async_setup_platform(
-    hass: HomeAssistant,
-    config: ConfigType,
-    async_add_entities: AddEntitiesCallback,
-    discovery_info: DiscoveryInfoType | None = None,
-) -> None:
-    """Set up MQTT camera configured under the camera platform key (deprecated)."""
-    # Deprecated in HA Core 2022.6
-    await async_setup_platform_helper(
-        hass,
-        camera.DOMAIN,
-        discovery_info or config,
-        async_add_entities,
-        _async_setup_entity,
-    )
 
 
 async def async_setup_entry(
@@ -103,70 +60,63 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up MQTT camera through configuration.yaml and dynamically through MQTT discovery."""
-    setup = functools.partial(
-        _async_setup_entity, hass, async_add_entities, config_entry=config_entry
+    """Set up MQTT camera through YAML and through MQTT discovery."""
+    async_setup_entity_entry_helper(
+        hass,
+        config_entry,
+        MqttCamera,
+        camera.DOMAIN,
+        async_add_entities,
+        DISCOVERY_SCHEMA,
+        PLATFORM_SCHEMA_MODERN,
     )
-    await async_setup_entry_helper(hass, camera.DOMAIN, setup, DISCOVERY_SCHEMA)
-
-
-async def _async_setup_entity(
-    hass: HomeAssistant,
-    async_add_entities: AddEntitiesCallback,
-    config: ConfigType,
-    config_entry: ConfigEntry | None = None,
-    discovery_data: dict | None = None,
-) -> None:
-    """Set up the MQTT Camera."""
-    async_add_entities([MqttCamera(hass, config, config_entry, discovery_data)])
 
 
 class MqttCamera(MqttEntity, Camera):
     """representation of a MQTT camera."""
 
-    _entity_id_format = camera.ENTITY_ID_FORMAT
-    _attributes_extra_blocked = MQTT_CAMERA_ATTRIBUTES_BLOCKED
+    _default_name = DEFAULT_NAME
+    _entity_id_format: str = camera.ENTITY_ID_FORMAT
+    _attributes_extra_blocked: frozenset[str] = MQTT_CAMERA_ATTRIBUTES_BLOCKED
+    _last_image: bytes | None = None
 
-    def __init__(self, hass, config, config_entry, discovery_data):
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        config: ConfigType,
+        config_entry: ConfigEntry,
+        discovery_data: DiscoveryInfoType | None,
+    ) -> None:
         """Initialize the MQTT Camera."""
-        self._last_image = None
-
         Camera.__init__(self)
         MqttEntity.__init__(self, hass, config, config_entry, discovery_data)
 
     @staticmethod
-    def config_schema():
+    def config_schema() -> vol.Schema:
         """Return the config schema."""
         return DISCOVERY_SCHEMA
 
-    def _prepare_subscribe_topics(self):
+    @callback
+    def _image_received(self, msg: ReceiveMessage) -> None:
+        """Handle new MQTT messages."""
+        if CONF_IMAGE_ENCODING in self._config:
+            self._last_image = b64decode(msg.payload)
+        else:
+            if TYPE_CHECKING:
+                assert isinstance(msg.payload, bytes)
+            self._last_image = msg.payload
+
+    @callback
+    def _prepare_subscribe_topics(self) -> None:
         """(Re)Subscribe to topics."""
 
-        @callback
-        @log_messages(self.hass, self.entity_id)
-        def message_received(msg):
-            """Handle new MQTT messages."""
-            if CONF_IMAGE_ENCODING in self._config:
-                self._last_image = b64decode(msg.payload)
-            else:
-                self._last_image = msg.payload
-
-        self._sub_state = subscription.async_prepare_subscribe_topics(
-            self.hass,
-            self._sub_state,
-            {
-                "state_topic": {
-                    "topic": self._config[CONF_TOPIC],
-                    "msg_callback": message_received,
-                    "qos": self._config[CONF_QOS],
-                    "encoding": None,
-                }
-            },
+        self.add_subscription(
+            CONF_TOPIC, self._image_received, None, disable_encoding=True
         )
 
-    async def _subscribe_topics(self):
+    async def _subscribe_topics(self) -> None:
         """(Re)Subscribe to topics."""
-        await subscription.async_subscribe_topics(self.hass, self._sub_state)
+        subscription.async_subscribe_topics_internal(self.hass, self._sub_state)
 
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None

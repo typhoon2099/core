@@ -1,9 +1,10 @@
 """Support for Modbus fans."""
+
 from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.fan import FanEntity
+from homeassistant.components.fan import FanEntity, FanEntityFeature
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -30,12 +31,24 @@ async def async_setup_platform(
 
     for entry in discovery_info[CONF_FANS]:
         hub: ModbusHub = get_hub(hass, discovery_info[CONF_NAME])
-        fans.append(ModbusFan(hub, entry))
+        fans.append(ModbusFan(hass, hub, entry))
     async_add_entities(fans)
 
 
 class ModbusFan(BaseSwitch, FanEntity):
     """Class representing a Modbus fan."""
+
+    _enable_turn_on_off_backwards_compatibility = False
+
+    def __init__(
+        self, hass: HomeAssistant, hub: ModbusHub, config: dict[str, Any]
+    ) -> None:
+        """Initialize the fan."""
+        super().__init__(hass, hub, config)
+        if self.command_on is not None and self._command_off is not None:
+            self._attr_supported_features |= (
+                FanEntityFeature.TURN_OFF | FanEntityFeature.TURN_ON
+            )
 
     async def async_turn_on(
         self,

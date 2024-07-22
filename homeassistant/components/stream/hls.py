@@ -1,4 +1,5 @@
 """Provide functionality to stream HLS."""
+
 from __future__ import annotations
 
 from http import HTTPStatus
@@ -27,6 +28,8 @@ from .core import (
 from .fmp4utils import get_codec_string, transform_init
 
 if TYPE_CHECKING:
+    from homeassistant.components.camera import DynamicStreamSettings
+
     from . import Stream
 
 
@@ -50,9 +53,16 @@ class HlsStreamOutput(StreamOutput):
         hass: HomeAssistant,
         idle_timer: IdleTimer,
         stream_settings: StreamSettings,
+        dynamic_stream_settings: DynamicStreamSettings,
     ) -> None:
         """Initialize HLS output."""
-        super().__init__(hass, idle_timer, stream_settings, deque_maxlen=MAX_SEGMENTS)
+        super().__init__(
+            hass,
+            idle_timer,
+            stream_settings,
+            dynamic_stream_settings,
+            deque_maxlen=MAX_SEGMENTS,
+        )
         self._target_duration = stream_settings.min_segment_duration
 
     @property
@@ -339,7 +349,7 @@ class HlsInitView(StreamView):
         if not (segments := track.get_segments()) or not (body := segments[0].init):
             return web.HTTPNotFound()
         return web.Response(
-            body=transform_init(body, stream.orientation),
+            body=transform_init(body, stream.dynamic_stream_settings.orientation),
             headers={"Content-Type": "video/mp4"},
         )
 

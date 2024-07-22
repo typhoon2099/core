@@ -1,4 +1,5 @@
 """Support for WiZ sensors."""
+
 from __future__ import annotations
 
 from homeassistant.components.sensor import (
@@ -7,20 +8,21 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import POWER_WATT, SIGNAL_STRENGTH_DECIBELS_MILLIWATT
+from homeassistant.const import (
+    SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+    EntityCategory,
+    UnitOfPower,
+)
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
+from . import WizConfigEntry
 from .entity import WizEntity
 from .models import WizData
 
 SENSORS: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
         key="rssi",
-        name="Signal strength",
         entity_registry_enabled_default=False,
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
@@ -33,28 +35,27 @@ SENSORS: tuple[SensorEntityDescription, ...] = (
 POWER_SENSORS: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
         key="power",
-        name="Current power",
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.POWER,
-        native_unit_of_measurement=POWER_WATT,
+        native_unit_of_measurement=UnitOfPower.WATT,
     ),
 )
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: WizConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the wiz sensor."""
-    wiz_data: WizData = hass.data[DOMAIN][entry.entry_id]
     entities = [
-        WizSensor(wiz_data, entry.title, description) for description in SENSORS
+        WizSensor(entry.runtime_data, entry.title, description)
+        for description in SENSORS
     ]
-    if wiz_data.coordinator.data is not None:
+    if entry.runtime_data.coordinator.data is not None:
         entities.extend(
             [
-                WizPowerSensor(wiz_data, entry.title, description)
+                WizPowerSensor(entry.runtime_data, entry.title, description)
                 for description in POWER_SENSORS
             ]
         )

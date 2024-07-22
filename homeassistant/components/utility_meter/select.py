@@ -1,4 +1,5 @@
 """Support for tariff selection."""
+
 from __future__ import annotations
 
 import logging
@@ -7,11 +8,13 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_UNIQUE_ID
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device import async_device_info_to_link_from_entity
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
-from .const import CONF_METER, CONF_TARIFFS, DATA_UTILITY, TARIFF_ICON
+from .const import CONF_METER, CONF_SOURCE_SENSOR, CONF_TARIFFS, DATA_UTILITY
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,7 +29,18 @@ async def async_setup_entry(
     tariffs: list[str] = config_entry.options[CONF_TARIFFS]
 
     unique_id = config_entry.entry_id
-    tariff_select = TariffSelect(name, tariffs, unique_id)
+
+    device_info = async_device_info_to_link_from_entity(
+        hass,
+        config_entry.options[CONF_SOURCE_SENSOR],
+    )
+
+    tariff_select = TariffSelect(
+        name,
+        tariffs,
+        unique_id,
+        device_info=device_info,
+    )
     async_add_entities([tariff_select])
 
 
@@ -63,13 +77,21 @@ async def async_setup_platform(
 class TariffSelect(SelectEntity, RestoreEntity):
     """Representation of a Tariff selector."""
 
-    def __init__(self, name, tariffs, unique_id):
+    _attr_translation_key = "tariff"
+
+    def __init__(
+        self,
+        name,
+        tariffs,
+        unique_id,
+        device_info: DeviceInfo | None = None,
+    ) -> None:
         """Initialize a tariff selector."""
         self._attr_name = name
         self._attr_unique_id = unique_id
+        self._attr_device_info = device_info
         self._current_tariff: str | None = None
         self._tariffs = tariffs
-        self._attr_icon = TARIFF_ICON
         self._attr_should_poll = False
 
     @property

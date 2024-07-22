@@ -1,8 +1,9 @@
 """The media_source integration."""
+
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Protocol
 
 import voluptuous as vol
 
@@ -18,6 +19,7 @@ from homeassistant.components.media_player.browse_media import (
 )
 from homeassistant.components.websocket_api import ActiveConnection
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.frame import report
 from homeassistant.helpers.integration_platform import (
     async_process_integration_platforms,
@@ -53,6 +55,16 @@ __all__ = [
 ]
 
 
+CONFIG_SCHEMA = cv.empty_config_schema(DOMAIN)
+
+
+class MediaSourceProtocol(Protocol):
+    """Define the format of media_source platforms."""
+
+    async def async_get_media_source(self, hass: HomeAssistant) -> MediaSource:
+        """Set up media source."""
+
+
 def is_media_source_id(media_content_id: str) -> bool:
     """Test if identifier is a media source."""
     return URI_SCHEME_REGEX.match(media_content_id) is not None
@@ -82,7 +94,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 
 async def _process_media_source_platform(
-    hass: HomeAssistant, domain: str, platform: Any
+    hass: HomeAssistant,
+    domain: str,
+    platform: MediaSourceProtocol,
 ) -> None:
     """Process a media source platform."""
     hass.data[DOMAIN][domain] = await platform.async_get_media_source(hass)
@@ -144,7 +158,10 @@ async def async_resolve_media(
         raise Unresolvable("Media Source not loaded")
 
     if target_media_player is UNDEFINED:
-        report("calls media_source.async_resolve_media without passing an entity_id")
+        report(
+            "calls media_source.async_resolve_media without passing an entity_id",
+            {DOMAIN},
+        )
         target_media_player = None
 
     try:
@@ -163,7 +180,7 @@ async def async_resolve_media(
 )
 @websocket_api.async_response
 async def websocket_browse_media(
-    hass: HomeAssistant, connection: ActiveConnection, msg: dict
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
 ) -> None:
     """Browse available media."""
     try:
@@ -185,11 +202,11 @@ async def websocket_browse_media(
 )
 @websocket_api.async_response
 async def websocket_resolve_media(
-    hass: HomeAssistant, connection: ActiveConnection, msg: dict
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
 ) -> None:
     """Resolve media."""
     try:
-        media = await async_resolve_media(hass, msg["media_content_id"])
+        media = await async_resolve_media(hass, msg["media_content_id"], None)
     except Unresolvable as err:
         connection.send_error(msg["id"], "resolve_media_failed", str(err))
         return

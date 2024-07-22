@@ -1,8 +1,8 @@
 """Tests for the Yale Access Bluetooth integration."""
-from bleak.backends.device import BLEDevice
-from bleak.backends.scanner import AdvertisementData
 
 from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
+
+from tests.components.bluetooth import generate_advertisement_data, generate_ble_device
 
 YALE_ACCESS_LOCK_DISCOVERY_INFO = BluetoothServiceInfoBleak(
     name="M1012LU",
@@ -15,10 +15,11 @@ YALE_ACCESS_LOCK_DISCOVERY_INFO = BluetoothServiceInfoBleak(
     service_uuids=[],
     service_data={},
     source="local",
-    device=BLEDevice(address="AA:BB:CC:DD:EE:FF", name="M1012LU"),
-    advertisement=AdvertisementData(),
+    device=generate_ble_device(address="AA:BB:CC:DD:EE:FF", name="M1012LU"),
+    advertisement=generate_advertisement_data(),
     time=0,
     connectable=True,
+    tx_power=-127,
 )
 
 
@@ -33,10 +34,11 @@ LOCK_DISCOVERY_INFO_UUID_ADDRESS = BluetoothServiceInfoBleak(
     service_uuids=[],
     service_data={},
     source="local",
-    device=BLEDevice(address="AA:BB:CC:DD:EE:FF", name="M1012LU"),
-    advertisement=AdvertisementData(),
+    device=generate_ble_device(address="AA:BB:CC:DD:EE:FF", name="M1012LU"),
+    advertisement=generate_advertisement_data(),
     time=0,
     connectable=True,
+    tx_power=-127,
 )
 
 OLD_FIRMWARE_LOCK_DISCOVERY_INFO = BluetoothServiceInfoBleak(
@@ -50,10 +52,11 @@ OLD_FIRMWARE_LOCK_DISCOVERY_INFO = BluetoothServiceInfoBleak(
     service_uuids=[],
     service_data={},
     source="local",
-    device=BLEDevice(address="AA:BB:CC:DD:EE:FF", name="Aug"),
-    advertisement=AdvertisementData(),
+    device=generate_ble_device(address="AA:BB:CC:DD:EE:FF", name="Aug"),
+    advertisement=generate_advertisement_data(),
     time=0,
     connectable=True,
+    tx_power=-127,
 )
 
 
@@ -68,8 +71,9 @@ NOT_YALE_DISCOVERY_INFO = BluetoothServiceInfoBleak(
     service_uuids=[],
     service_data={},
     source="local",
-    device=BLEDevice(address="AA:BB:CC:DD:EE:FF", name="Aug"),
-    advertisement=AdvertisementData(),
+    device=generate_ble_device(address="AA:BB:CC:DD:EE:FF", name="Aug"),
+    advertisement=generate_advertisement_data(),
     time=0,
     connectable=True,
+    tx_power=-127,
 )

@@ -1,4 +1,5 @@
 """Support for Venstar WiFi Thermostats."""
+
 from __future__ import annotations
 
 import voluptuous as vol
@@ -9,7 +10,7 @@ from homeassistant.components.climate import (
     ATTR_TARGET_TEMP_LOW,
     FAN_AUTO,
     FAN_ON,
-    PLATFORM_SCHEMA,
+    PLATFORM_SCHEMA as CLIMATE_PLATFORM_SCHEMA,
     PRESET_AWAY,
     PRESET_NONE,
     ClimateEntity,
@@ -28,15 +29,14 @@ from homeassistant.const import (
     CONF_USERNAME,
     PRECISION_HALVES,
     STATE_ON,
-    TEMP_CELSIUS,
-    TEMP_FAHRENHEIT,
+    UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
-from . import VenstarDataUpdateCoordinator, VenstarEntity
+from . import VenstarEntity
 from .const import (
     _LOGGER,
     ATTR_FAN_STATE,
@@ -46,8 +46,9 @@ from .const import (
     DOMAIN,
     HOLD_MODE_TEMPERATURE,
 )
+from .coordinator import VenstarDataUpdateCoordinator
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+PLATFORM_SCHEMA = CLIMATE_PLATFORM_SCHEMA.extend(
     {
         vol.Required(CONF_HOST): cv.string,
         vol.Optional(CONF_PASSWORD): cv.string,
@@ -108,6 +109,8 @@ class VenstarThermostat(VenstarEntity, ClimateEntity):
     _attr_fan_modes = [FAN_ON, FAN_AUTO]
     _attr_hvac_modes = [HVACMode.HEAT, HVACMode.COOL, HVACMode.OFF, HVACMode.AUTO]
     _attr_precision = PRECISION_HALVES
+    _attr_name = None
+    _enable_turn_on_off_backwards_compatibility = False
 
     def __init__(
         self,
@@ -122,15 +125,16 @@ class VenstarThermostat(VenstarEntity, ClimateEntity):
             HVACMode.AUTO: self._client.MODE_AUTO,
         }
         self._attr_unique_id = config.entry_id
-        self._attr_name = self._client.name
 
     @property
-    def supported_features(self) -> int:
+    def supported_features(self) -> ClimateEntityFeature:
         """Return the list of supported features."""
         features = (
             ClimateEntityFeature.TARGET_TEMPERATURE
             | ClimateEntityFeature.FAN_MODE
             | ClimateEntityFeature.PRESET_MODE
+            | ClimateEntityFeature.TURN_OFF
+            | ClimateEntityFeature.TURN_ON
         )
 
         if self._client.mode == self._client.MODE_AUTO:
@@ -145,8 +149,8 @@ class VenstarThermostat(VenstarEntity, ClimateEntity):
     def temperature_unit(self) -> str:
         """Return the unit of measurement, as defined by the API."""
         if self._client.tempunits == self._client.TEMPUNITS_F:
-            return TEMP_FAHRENHEIT
-        return TEMP_CELSIUS
+            return UnitOfTemperature.FAHRENHEIT
+        return UnitOfTemperature.CELSIUS
 
     @property
     def current_temperature(self):
@@ -292,8 +296,10 @@ class VenstarThermostat(VenstarEntity, ClimateEntity):
             else:
                 success = False
                 _LOGGER.error(
-                    "The thermostat is currently not in a mode "
-                    "that supports target temperature: %s",
+                    (
+                        "The thermostat is currently not in a mode "
+                        "that supports target temperature: %s"
+                    ),
                     operation_mode,
                 )
 

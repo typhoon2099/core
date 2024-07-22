@@ -1,4 +1,5 @@
 """Database executor helpers."""
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -11,9 +12,13 @@ from homeassistant.util.executor import InterruptibleThreadPoolExecutor
 
 
 def _worker_with_shutdown_hook(
-    shutdown_hook: Callable[[], None], *args: Any, **kwargs: Any
+    shutdown_hook: Callable[[], None],
+    recorder_and_worker_thread_ids: set[int],
+    *args: Any,
+    **kwargs: Any,
 ) -> None:
     """Create a worker that calls a function after its finished."""
+    recorder_and_worker_thread_ids.add(threading.get_ident())
     _worker(*args, **kwargs)
     shutdown_hook()
 
@@ -21,9 +26,12 @@ def _worker_with_shutdown_hook(
 class DBInterruptibleThreadPoolExecutor(InterruptibleThreadPoolExecutor):
     """A database instance that will not deadlock on shutdown."""
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    def __init__(
+        self, recorder_and_worker_thread_ids: set[int], *args: Any, **kwargs: Any
+    ) -> None:
         """Init the executor with a shutdown hook support."""
         self._shutdown_hook: Callable[[], None] = kwargs.pop("shutdown_hook")
+        self.recorder_and_worker_thread_ids = recorder_and_worker_thread_ids
         super().__init__(*args, **kwargs)
 
     def _adjust_thread_count(self) -> None:
@@ -39,7 +47,10 @@ class DBInterruptibleThreadPoolExecutor(InterruptibleThreadPoolExecutor):
 
         # When the executor gets lost, the weakref callback will wake up
         # the worker threads.
-        def weakref_cb(_: Any, q=self._work_queue) -> None:  # type: ignore[no-untyped-def] # pylint: disable=invalid-name
+        def weakref_cb(  # type: ignore[no-untyped-def]
+            _: Any,
+            q=self._work_queue,
+        ) -> None:
             q.put(None)
 
         num_threads = len(self._threads)
@@ -50,6 +61,7 @@ class DBInterruptibleThreadPoolExecutor(InterruptibleThreadPoolExecutor):
                 target=_worker_with_shutdown_hook,
                 args=(
                     self._shutdown_hook,
+                    self.recorder_and_worker_thread_ids,
                     weakref.ref(self, weakref_cb),
                     self._work_queue,
                     self._initializer,

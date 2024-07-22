@@ -1,4 +1,5 @@
 """Support for Keenetic routers as device tracker."""
+
 from __future__ import annotations
 
 import logging
@@ -7,12 +8,12 @@ from ndms2_client import Device
 
 from homeassistant.components.device_tracker import (
     DOMAIN as DEVICE_TRACKER_DOMAIN,
+    ScannerEntity,
     SourceType,
 )
-from homeassistant.components.device_tracker.config_entry import ScannerEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import entity_registry
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 import homeassistant.util.dt as dt_util
@@ -40,14 +41,13 @@ async def async_setup_entry(
 
     update_from_router()
 
-    registry = entity_registry.async_get(hass)
+    registry = er.async_get(hass)
     # Restore devices that are not a part of active clients list.
     restored = []
-    for entity_entry in registry.entities.values():
-        if (
-            entity_entry.config_entry_id == config_entry.entry_id
-            and entity_entry.domain == DEVICE_TRACKER_DOMAIN
-        ):
+    for entity_entry in registry.entities.get_entries_for_config_entry_id(
+        config_entry.entry_id
+    ):
+        if entity_entry.domain == DEVICE_TRACKER_DOMAIN:
             mac = entity_entry.unique_id.partition("_")[0]
             if mac not in tracked:
                 tracked.add(mac)
@@ -64,8 +64,7 @@ async def async_setup_entry(
                     )
                 )
 
-    if restored:
-        async_add_entities(restored)
+    async_add_entities(restored)
 
     async_dispatcher_connect(hass, router.signal_update, update_from_router)
 
@@ -79,8 +78,7 @@ def update_items(router: KeeneticRouter, async_add_entities, tracked: set[str]):
             tracked.add(mac)
             new_tracked.append(KeeneticTracker(device, router))
 
-    if new_tracked:
-        async_add_entities(new_tracked)
+    async_add_entities(new_tracked)
 
 
 class KeeneticTracker(ScannerEntity):
@@ -121,7 +119,7 @@ class KeeneticTracker(ScannerEntity):
         return f"{self._device.mac}_{self._router.config_entry.entry_id}"
 
     @property
-    def ip_address(self) -> str:
+    def ip_address(self) -> str | None:
         """Return the primary ip address of the device."""
         return self._device.ip if self.is_connected else None
 

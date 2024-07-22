@@ -1,4 +1,5 @@
 """Support for Acmeda Roller Blinds."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -8,29 +9,28 @@ from homeassistant.components.cover import (
     CoverEntity,
     CoverEntityFeature,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from . import AcmedaConfigEntry
 from .base import AcmedaBase
-from .const import ACMEDA_HUB_UPDATE, DOMAIN
+from .const import ACMEDA_HUB_UPDATE
 from .helpers import async_add_acmeda_entities
-from .hub import PulseHub
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: AcmedaConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Acmeda Rollers from a config entry."""
-    hub: PulseHub = hass.data[DOMAIN][config_entry.entry_id]
+    hub = config_entry.runtime_data
 
     current: set[int] = set()
 
     @callback
-    def async_add_acmeda_covers():
+    def async_add_acmeda_covers() -> None:
         async_add_acmeda_entities(
             hass, AcmedaCover, config_entry, current, async_add_entities
         )
@@ -45,7 +45,9 @@ async def async_setup_entry(
 
 
 class AcmedaCover(AcmedaBase, CoverEntity):
-    """Representation of a Acmeda cover device."""
+    """Representation of an Acmeda cover device."""
+
+    _attr_name = None
 
     @property
     def current_cover_position(self) -> int | None:
@@ -70,9 +72,9 @@ class AcmedaCover(AcmedaBase, CoverEntity):
         return position
 
     @property
-    def supported_features(self) -> int:
+    def supported_features(self) -> CoverEntityFeature:
         """Flag supported features."""
-        supported_features = 0
+        supported_features = CoverEntityFeature(0)
         if self.current_cover_position is not None:
             supported_features |= (
                 CoverEntityFeature.OPEN
@@ -93,7 +95,7 @@ class AcmedaCover(AcmedaBase, CoverEntity):
     @property
     def is_closed(self) -> bool:
         """Return if the cover is closed."""
-        return self.roller.closed_percent == 100
+        return self.roller.closed_percent == 100  # type: ignore[no-any-return]
 
     async def async_close_cover(self, **kwargs: Any) -> None:
         """Close the roller."""

@@ -1,11 +1,12 @@
 """Config flow to configure the LG Soundbar integration."""
-from queue import Full, Queue
-import socket
+
+import logging
+from queue import Empty, Full, Queue
 
 import temescal
 import voluptuous as vol
 
-from homeassistant import config_entries
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PORT
 
 from .const import DEFAULT_PORT, DOMAIN
@@ -14,50 +15,64 @@ DATA_SCHEMA = {
     vol.Required(CONF_HOST): str,
 }
 
+_LOGGER = logging.getLogger(__name__)
+
+QUEUE_TIMEOUT = 10
+
 
 def test_connect(host, port):
     """LG Soundbar config flow test_connect."""
     uuid_q = Queue(maxsize=1)
     name_q = Queue(maxsize=1)
 
+    def check_msg_response(response, msgs, attr):
+        msg = response["msg"]
+        if msg == msgs or msg in msgs:
+            if "data" in response and attr in response["data"]:
+                return True
+            _LOGGER.debug(
+                "[%s] msg did not contain expected attr [%s]: %s", msg, attr, response
+            )
+        return False
+
     def queue_add(attr_q, data):
         try:
             attr_q.put_nowait(data)
         except Full:
-            pass
+            _LOGGER.debug("attempted to add [%s] to full queue", data)
 
     def msg_callback(response):
-        if (
-            response["msg"] in ["MAC_INFO_DEV", "PRODUCT_INFO"]
-            and "s_uuid" in response["data"]
-        ):
+        if check_msg_response(response, ["MAC_INFO_DEV", "PRODUCT_INFO"], "s_uuid"):
             queue_add(uuid_q, response["data"]["s_uuid"])
-        if (
-            response["msg"] == "SPK_LIST_VIEW_INFO"
-            and "s_user_name" in response["data"]
-        ):
+        if check_msg_response(response, "SPK_LIST_VIEW_INFO", "s_user_name"):
             queue_add(name_q, response["data"]["s_user_name"])
+
+    details = {}
 
     try:
         connection = temescal.temescal(host, port=port, callback=msg_callback)
+        connection.get_info()
         connection.get_mac_info()
         if uuid_q.empty():
             connection.get_product_info()
-        connection.get_info()
-        details = {"name": name_q.get(timeout=10), "uuid": uuid_q.get(timeout=10)}
-        return details
-    except socket.timeout as err:
+        details["name"] = name_q.get(timeout=QUEUE_TIMEOUT)
+        details["uuid"] = uuid_q.get(timeout=QUEUE_TIMEOUT)
+    except Empty:
+        pass
+    except TimeoutError as err:
         raise ConnectionError(f"Connection timeout with server: {host}:{port}") from err
     except OSError as err:
         raise ConnectionError(f"Cannot resolve hostname: {host}") from err
 
+    return details
 
-class LGSoundbarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+
+class LGSoundbarConfigFlow(ConfigFlow, domain=DOMAIN):
     """LG Soundbar config flow."""
 
     VERSION = 1
 
-    async def async_step_user(self, user_input=None):
+    async def async_step_user(self, user_input=None) -> ConfigFlowResult:
         """Handle a flow initiated by the user."""
         if user_input is None:
             return self._show_form()
@@ -70,13 +85,19 @@ class LGSoundbarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         except ConnectionError:
             errors["base"] = "cannot_connect"
         else:
-            await self.async_set_unique_id(details["uuid"])
-            self._abort_if_unique_id_configured()
-            info = {
-                CONF_HOST: user_input[CONF_HOST],
-                CONF_PORT: DEFAULT_PORT,
-            }
-            return self.async_create_entry(title=details["name"], data=info)
+            if len(details) != 0:
+                info = {
+                    CONF_HOST: user_input[CONF_HOST],
+                    CONF_PORT: DEFAULT_PORT,
+                }
+                if "uuid" in details:
+                    unique_id = details["uuid"]
+                    await self.async_set_unique_id(unique_id)
+                    self._abort_if_unique_id_configured()
+                else:
+                    self._async_abort_entries_match(info)
+                return self.async_create_entry(title=details["name"], data=info)
+            errors["base"] = "no_data"
 
         return self._show_form(errors)
 

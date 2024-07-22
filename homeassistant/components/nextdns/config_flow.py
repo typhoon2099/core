@@ -1,23 +1,22 @@
 """Adds config flow for NextDNS."""
+
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 from aiohttp.client_exceptions import ClientConnectorError
-from async_timeout import timeout
 from nextdns import ApiError, InvalidApiKeyError, NextDns
+from tenacity import RetryError
 import voluptuous as vol
 
-from homeassistant import config_entries
-from homeassistant.const import CONF_API_KEY
-from homeassistant.data_entry_flow import FlowResult
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.const import CONF_API_KEY, CONF_PROFILE_NAME
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import CONF_PROFILE_ID, CONF_PROFILE_NAME, DOMAIN
+from .const import CONF_PROFILE_ID, DOMAIN
 
 
-class NextDnsFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
+class NextDnsFlowHandler(ConfigFlow, domain=DOMAIN):
     """Config flow for NextDNS."""
 
     VERSION = 1
@@ -29,7 +28,7 @@ class NextDnsFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle a flow initialized by the user."""
         errors: dict[str, str] = {}
 
@@ -38,15 +37,14 @@ class NextDnsFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self.api_key = user_input[CONF_API_KEY]
             try:
-                async with timeout(10):
-                    self.nextdns = await NextDns.create(
-                        websession, user_input[CONF_API_KEY]
-                    )
+                self.nextdns = await NextDns.create(
+                    websession, user_input[CONF_API_KEY]
+                )
             except InvalidApiKeyError:
                 errors["base"] = "invalid_api_key"
-            except (ApiError, ClientConnectorError, asyncio.TimeoutError):
+            except (ApiError, ClientConnectorError, RetryError, TimeoutError):
                 errors["base"] = "cannot_connect"
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # noqa: BLE001
                 errors["base"] = "unknown"
             else:
                 return await self.async_step_profiles()
@@ -59,7 +57,7 @@ class NextDnsFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_profiles(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle the profiles step."""
         errors: dict[str, str] = {}
 

@@ -1,16 +1,21 @@
 """Support for binary sensor using RPi GPIO."""
+
 from __future__ import annotations
 
 import requests
 import voluptuous as vol
 
-from homeassistant.components.binary_sensor import PLATFORM_SCHEMA, BinarySensorEntity
+from homeassistant.components.binary_sensor import (
+    PLATFORM_SCHEMA as BINARY_SENSOR_PLATFORM_SCHEMA,
+    BinarySensorEntity,
+)
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
+from .. import remote_rpi_gpio
 from . import (
     CONF_BOUNCETIME,
     CONF_INVERT_LOGIC,
@@ -19,13 +24,12 @@ from . import (
     DEFAULT_INVERT_LOGIC,
     DEFAULT_PULL_MODE,
 )
-from .. import remote_rpi_gpio
 
 CONF_PORTS = "ports"
 
 _SENSORS_SCHEMA = vol.Schema({cv.positive_int: cv.string})
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+PLATFORM_SCHEMA = BINARY_SENSOR_PLATFORM_SCHEMA.extend(
     {
         vol.Required(CONF_HOST): cv.string,
         vol.Required(CONF_PORTS): _SENSORS_SCHEMA,

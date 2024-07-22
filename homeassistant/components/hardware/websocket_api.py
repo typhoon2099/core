@@ -1,9 +1,11 @@
 """The Hardware websocket API."""
+
 from __future__ import annotations
 
 import contextlib
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
+from typing import Any
 
 import psutil_home_assistant as ha_psutil
 import voluptuous as vol
@@ -19,7 +21,7 @@ from .hardware import async_process_hardware_platforms
 from .models import HardwareProtocol
 
 
-@dataclass
+@dataclass(slots=True)
 class SystemStatus:
     """System status."""
 
@@ -46,7 +48,7 @@ async def async_setup(hass: HomeAssistant) -> None:
 )
 @websocket_api.async_response
 async def ws_info(
-    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
 ) -> None:
     """Return hardware info."""
     hardware_info = []
@@ -65,15 +67,15 @@ async def ws_info(
     connection.send_result(msg["id"], {"hardware": hardware_info})
 
 
+@callback
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "hardware/subscribe_system_status",
     }
 )
-@websocket_api.async_response
-async def ws_subscribe_system_status(
-    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
-):
+def ws_subscribe_system_status(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
     """Subscribe to system status updates."""
 
     system_status: SystemStatus = hass.data[DOMAIN]["system_status"]
@@ -97,8 +99,8 @@ async def ws_subscribe_system_status(
             "memory_free_mb": round(virtual_memory.available / 1024**2, 1),
             "timestamp": dt_util.utcnow().isoformat(),
         }
-        for connection, msg_id in system_status.subscribers:
-            connection.send_message(websocket_api.event_message(msg_id, json_msg))
+        for conn, msg_id in system_status.subscribers:
+            conn.send_message(websocket_api.event_message(msg_id, json_msg))
 
     if not system_status.subscribers:
         system_status.remove_periodic_timer = async_track_time_interval(

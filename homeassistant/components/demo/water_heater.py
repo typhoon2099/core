@@ -1,4 +1,5 @@
 """Demo platform that offers a fake water heater device."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -8,31 +9,16 @@ from homeassistant.components.water_heater import (
     WaterHeaterEntityFeature,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_TEMPERATURE, TEMP_CELSIUS, TEMP_FAHRENHEIT
+from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 SUPPORT_FLAGS_HEATER = (
     WaterHeaterEntityFeature.TARGET_TEMPERATURE
+    | WaterHeaterEntityFeature.ON_OFF
     | WaterHeaterEntityFeature.OPERATION_MODE
     | WaterHeaterEntityFeature.AWAY_MODE
 )
-
-
-async def async_setup_platform(
-    hass: HomeAssistant,
-    config: ConfigType,
-    async_add_entities: AddEntitiesCallback,
-    discovery_info: DiscoveryInfoType | None = None,
-) -> None:
-    """Set up the Demo water_heater devices."""
-    async_add_entities(
-        [
-            DemoWaterHeater("Demo Water Heater", 119, TEMP_FAHRENHEIT, False, "eco"),
-            DemoWaterHeater("Demo Water Heater Celsius", 45, TEMP_CELSIUS, True, "eco"),
-        ]
-    )
 
 
 async def async_setup_entry(
@@ -41,7 +27,16 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Demo config entry."""
-    await async_setup_platform(hass, {}, async_add_entities)
+    async_add_entities(
+        [
+            DemoWaterHeater(
+                "Demo Water Heater", 119, UnitOfTemperature.FAHRENHEIT, False, "eco"
+            ),
+            DemoWaterHeater(
+                "Demo Water Heater Celsius", 45, UnitOfTemperature.CELSIUS, True, "eco"
+            ),
+        ]
+    )
 
 
 class DemoWaterHeater(WaterHeaterEntity):
@@ -61,18 +56,11 @@ class DemoWaterHeater(WaterHeaterEntity):
         """Initialize the water_heater device."""
         self._attr_name = name
         if target_temperature is not None:
-            self._attr_supported_features = (
-                self._attr_supported_features
-                | WaterHeaterEntityFeature.TARGET_TEMPERATURE
-            )
+            self._attr_supported_features |= WaterHeaterEntityFeature.TARGET_TEMPERATURE
         if away is not None:
-            self._attr_supported_features = (
-                self._attr_supported_features | WaterHeaterEntityFeature.AWAY_MODE
-            )
+            self._attr_supported_features |= WaterHeaterEntityFeature.AWAY_MODE
         if current_operation is not None:
-            self._attr_supported_features = (
-                self._attr_supported_features | WaterHeaterEntityFeature.OPERATION_MODE
-            )
+            self._attr_supported_features |= WaterHeaterEntityFeature.OPERATION_MODE
         self._attr_target_temperature = target_temperature
         self._attr_temperature_unit = unit_of_measurement
         self._attr_is_away_mode_on = away
@@ -106,3 +94,11 @@ class DemoWaterHeater(WaterHeaterEntity):
         """Turn away mode off."""
         self._attr_is_away_mode_on = False
         self.schedule_update_ha_state()
+
+    def turn_on(self, **kwargs: Any) -> None:
+        """Turn on water heater."""
+        self.set_operation_mode("eco")
+
+    def turn_off(self, **kwargs: Any) -> None:
+        """Turn off water heater."""
+        self.set_operation_mode("off")

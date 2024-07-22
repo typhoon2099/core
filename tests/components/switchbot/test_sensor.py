@@ -1,5 +1,6 @@
 """Test the switchbot sensors."""
 
+import pytest
 
 from homeassistant.components.sensor import ATTR_STATE_CLASS
 from homeassistant.components.switchbot.const import DOMAIN
@@ -11,6 +12,7 @@ from homeassistant.const import (
     CONF_PASSWORD,
     CONF_SENSOR_TYPE,
 )
+from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
 
 from . import WOHAND_SERVICE_INFO
@@ -19,7 +21,8 @@ from tests.common import MockConfigEntry
 from tests.components.bluetooth import inject_bluetooth_service_info
 
 
-async def test_sensors(hass, entity_registry_enabled_by_default):
+@pytest.mark.usefixtures("entity_registry_enabled_by_default")
+async def test_sensors(hass: HomeAssistant) -> None:
     """Test setting up creates the sensors."""
     await async_setup_component(hass, DOMAIN, {})
     inject_bluetooth_service_info(hass, WOHAND_SERVICE_INFO)
@@ -48,10 +51,10 @@ async def test_sensors(hass, entity_registry_enabled_by_default):
     assert battery_sensor_attrs[ATTR_UNIT_OF_MEASUREMENT] == "%"
     assert battery_sensor_attrs[ATTR_STATE_CLASS] == "measurement"
 
-    rssi_sensor = hass.states.get("sensor.test_name_rssi")
+    rssi_sensor = hass.states.get("sensor.test_name_bluetooth_signal")
     rssi_sensor_attrs = rssi_sensor.attributes
     assert rssi_sensor.state == "-60"
-    assert rssi_sensor_attrs[ATTR_FRIENDLY_NAME] == "test-name Rssi"
+    assert rssi_sensor_attrs[ATTR_FRIENDLY_NAME] == "test-name Bluetooth signal"
     assert rssi_sensor_attrs[ATTR_UNIT_OF_MEASUREMENT] == "dBm"
 
     assert await hass.config_entries.async_unload(entry.entry_id)

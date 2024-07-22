@@ -1,5 +1,7 @@
 """Define test fixtures for RainMachine."""
+
 import json
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -31,7 +33,12 @@ def config_fixture(hass):
 @pytest.fixture(name="config_entry")
 def config_entry_fixture(hass, config, controller_mac):
     """Define a config entry fixture."""
-    entry = MockConfigEntry(domain=DOMAIN, unique_id=controller_mac, data=config)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=controller_mac,
+        data=config,
+        entry_id="81bd010ed0a63b705f6da8407cb26d4b",
+    )
     entry.add_to_hass(hass)
     return entry
 
@@ -76,19 +83,19 @@ def controller_mac_fixture():
     return "aa:bb:cc:dd:ee:ff"
 
 
-@pytest.fixture(name="data_api_versions", scope="session")
+@pytest.fixture(name="data_api_versions", scope="package")
 def data_api_versions_fixture():
     """Define API version data."""
     return json.loads(load_fixture("api_versions_data.json", "rainmachine"))
 
 
-@pytest.fixture(name="data_diagnostics_current", scope="session")
+@pytest.fixture(name="data_diagnostics_current", scope="package")
 def data_diagnostics_current_fixture():
     """Define current diagnostics data."""
     return json.loads(load_fixture("diagnostics_current_data.json", "rainmachine"))
 
 
-@pytest.fixture(name="data_machine_firmare_update_status", scope="session")
+@pytest.fixture(name="data_machine_firmare_update_status", scope="package")
 def data_machine_firmare_update_status_fixture():
     """Define machine firmware update status data."""
     return json.loads(
@@ -96,45 +103,60 @@ def data_machine_firmare_update_status_fixture():
     )
 
 
-@pytest.fixture(name="data_programs", scope="session")
+@pytest.fixture(name="data_programs", scope="package")
 def data_programs_fixture():
     """Define program data."""
-    return json.loads(load_fixture("programs_data.json", "rainmachine"))
+    raw_data = json.loads(load_fixture("programs_data.json", "rainmachine"))
+    # This replicate the process from `regenmaschine` to convert list to dict
+    return {program["uid"]: program for program in raw_data}
 
 
-@pytest.fixture(name="data_provision_settings", scope="session")
+@pytest.fixture(name="data_provision_settings", scope="package")
 def data_provision_settings_fixture():
     """Define provisioning settings data."""
     return json.loads(load_fixture("provision_settings_data.json", "rainmachine"))
 
 
-@pytest.fixture(name="data_restrictions_current", scope="session")
+@pytest.fixture(name="data_restrictions_current", scope="package")
 def data_restrictions_current_fixture():
     """Define current restrictions settings data."""
     return json.loads(load_fixture("restrictions_current_data.json", "rainmachine"))
 
 
-@pytest.fixture(name="data_restrictions_universal", scope="session")
+@pytest.fixture(name="data_restrictions_universal", scope="package")
 def data_restrictions_universal_fixture():
     """Define universal restrictions settings data."""
     return json.loads(load_fixture("restrictions_universal_data.json", "rainmachine"))
 
 
-@pytest.fixture(name="data_zones", scope="session")
+@pytest.fixture(name="data_zones", scope="package")
 def data_zones_fixture():
     """Define zone data."""
-    return json.loads(load_fixture("zones_data.json", "rainmachine"))
+    raw_data = json.loads(load_fixture("zones_data.json", "rainmachine"))
+    # This replicate the process from `regenmaschine` to convert list to dict
+    zone_details = json.loads(load_fixture("zones_details.json", "rainmachine"))
+
+    zones: dict[int, dict[str, Any]] = {}
+    for zone in raw_data:
+        [extra] = [z for z in zone_details if z["uid"] == zone["uid"]]
+        zones[zone["uid"]] = {**zone, **extra}
+
+    return zones
 
 
 @pytest.fixture(name="setup_rainmachine")
 async def setup_rainmachine_fixture(hass, client, config):
     """Define a fixture to set up RainMachine."""
-    with patch(
-        "homeassistant.components.rainmachine.Client", return_value=client
-    ), patch(
-        "homeassistant.components.rainmachine.config_flow.Client", return_value=client
-    ), patch(
-        "homeassistant.components.rainmachine.PLATFORMS", []
+    with (
+        patch("homeassistant.components.rainmachine.Client", return_value=client),
+        patch(
+            "homeassistant.components.rainmachine.config_flow.Client",
+            return_value=client,
+        ),
+        patch(
+            "homeassistant.components.rainmachine.PLATFORMS",
+            [],
+        ),
     ):
         assert await async_setup_component(hass, DOMAIN, config)
         await hass.async_block_till_done()

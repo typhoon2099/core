@@ -14,10 +14,14 @@ LUTRON_CASETA_BUTTON_EVENT = "lutron_caseta_button_event"
 
 BRIDGE_DEVICE_ID = "1"
 
+DEVICE_TYPE_WHITE_TUNE = "WhiteTune"
+DEVICE_TYPE_SPECTRUM_TUNE = "SpectrumTune"
+
 MANUFACTURER = "Lutron Electronics Co., Inc"
 
 ATTR_SERIAL = "serial"
 ATTR_TYPE = "type"
+ATTR_BUTTON_TYPE = "button_type"
 ATTR_LEAP_BUTTON_NUMBER = "leap_button_number"
 ATTR_BUTTON_NUMBER = "button_number"  # LIP button number
 ATTR_DEVICE_NAME = "device_name"

@@ -1,4 +1,5 @@
 """Support for Firmata light output."""
+
 from __future__ import annotations
 
 import logging
@@ -46,8 +47,7 @@ async def async_setup_entry(
         light_entity = FirmataLight(api, config_entry, name, pin)
         new_entities.append(light_entity)
 
-    if new_entities:
-        async_add_entities(new_entities)
+    async_add_entities(new_entities)
 
 
 class FirmataLight(FirmataPinEntity, LightEntity):

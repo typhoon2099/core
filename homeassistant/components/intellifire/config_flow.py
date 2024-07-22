@@ -1,4 +1,5 @@
 """Config flow for IntelliFire integration."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -11,10 +12,9 @@ from intellifire4py.exceptions import LoginException
 from intellifire4py.intellifire import IntellifireAPICloud, IntellifireAPILocal
 import voluptuous as vol
 
-from homeassistant import config_entries
 from homeassistant.components.dhcp import DhcpServiceInfo
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_API_KEY, CONF_HOST, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.data_entry_flow import FlowResult
 
 from .const import CONF_USER_ID, DOMAIN, LOGGER
 
@@ -38,7 +38,7 @@ async def validate_host_input(host: str, dhcp_mode: bool = False) -> str:
     """
     LOGGER.debug("Instantiating IntellifireAPI with host: [%s]", host)
     api = IntellifireAPILocal(fireplace_ip=host)
-    await api.poll(supress_warnings=dhcp_mode)
+    await api.poll(suppress_warnings=dhcp_mode)
     serial = api.data.serial
 
     LOGGER.debug("Found a fireplace: %s", serial)
@@ -46,12 +46,12 @@ async def validate_host_input(host: str, dhcp_mode: bool = False) -> str:
     return serial
 
 
-class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class IntelliFireConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for IntelliFire."""
 
     VERSION = 1
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the Config Flow Handler."""
         self._host: str = ""
         self._serial: str = ""
@@ -62,7 +62,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def _find_fireplaces(self):
         """Perform UDP discovery."""
         fireplace_finder = AsyncUDPFireplaceFinder()
-        discovered_hosts = await fireplace_finder.search_fireplace(timeout=1)
+        discovered_hosts = await fireplace_finder.search_fireplace(timeout=12)
         configured_hosts = {
             entry.data[CONF_HOST]
             for entry in self._async_current_entries(include_ignore=False)
@@ -107,7 +107,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_api_config(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Configure API access."""
 
         errors = {}
@@ -119,7 +119,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
         if user_input is not None:
-
             control_schema = vol.Schema(
                 {
                     vol.Required(
@@ -152,7 +151,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="api_config", errors=errors, data_schema=control_schema
         )
 
-    async def _async_validate_ip_and_continue(self, host: str) -> FlowResult:
+    async def _async_validate_ip_and_continue(self, host: str) -> ConfigFlowResult:
         """Validate local config and continue."""
         self._async_abort_entries_match({CONF_HOST: host})
         self._serial = await validate_host_input(host)
@@ -182,7 +181,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_pick_device(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Pick which device to configure."""
         errors = {}
         LOGGER.debug("STEP: pick_device")
@@ -211,7 +210,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Start the user flow."""
 
         # Launch fireplaces discovery
@@ -223,7 +222,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         LOGGER.debug("Running Step: manual_device_entry")
         return await self.async_step_manual_device_entry()
 
-    async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> FlowResult:
+    async def async_step_reauth(
+        self, entry_data: Mapping[str, Any]
+    ) -> ConfigFlowResult:
         """Perform reauth upon an API authentication error."""
         LOGGER.debug("STEP: reauth")
         entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
@@ -238,7 +239,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self.context["title_placeholders"] = placeholders
         return await self.async_step_api_config()
 
-    async def async_step_dhcp(self, discovery_info: DhcpServiceInfo) -> FlowResult:
+    async def async_step_dhcp(
+        self, discovery_info: DhcpServiceInfo
+    ) -> ConfigFlowResult:
         """Handle DHCP Discovery."""
 
         # Run validation logic on ip

@@ -1,4 +1,5 @@
 """Sensor for the CityBikes data."""
+
 from __future__ import annotations
 
 import asyncio
@@ -6,12 +7,11 @@ from datetime import timedelta
 import logging
 
 import aiohttp
-import async_timeout
 import voluptuous as vol
 
 from homeassistant.components.sensor import (
     ENTITY_ID_FORMAT,
-    PLATFORM_SCHEMA,
+    PLATFORM_SCHEMA as SENSOR_PLATFORM_SCHEMA,
     SensorEntity,
 )
 from homeassistant.const import (
@@ -24,8 +24,7 @@ from homeassistant.const import (
     CONF_LONGITUDE,
     CONF_NAME,
     CONF_RADIUS,
-    LENGTH_FEET,
-    LENGTH_METERS,
+    UnitOfLength,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import PlatformNotReady
@@ -37,6 +36,7 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.util import location
 from homeassistant.util.unit_conversion import DistanceConverter
+from homeassistant.util.unit_system import US_CUSTOMARY_SYSTEM
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ CITYBIKES_NETWORKS = "citybikes_networks"
 
 PLATFORM_SCHEMA = vol.All(
     cv.has_at_least_one_key(CONF_RADIUS, CONF_STATIONS_LIST),
-    PLATFORM_SCHEMA.extend(
+    SENSOR_PLATFORM_SCHEMA.extend(
         {
             vol.Optional(CONF_NAME, default=""): cv.string,
             vol.Optional(CONF_NETWORK): cv.string,
@@ -140,12 +140,12 @@ async def async_citybikes_request(hass, uri, schema):
     try:
         session = async_get_clientsession(hass)
 
-        async with async_timeout.timeout(REQUEST_TIMEOUT):
+        async with asyncio.timeout(REQUEST_TIMEOUT):
             req = await session.get(DEFAULT_ENDPOINT.format(uri=uri))
 
         json_response = await req.json()
         return schema(json_response)
-    except (asyncio.TimeoutError, aiohttp.ClientError):
+    except (TimeoutError, aiohttp.ClientError):
         _LOGGER.error("Could not connect to CityBikes API endpoint")
     except ValueError:
         _LOGGER.error("Received non-JSON data from CityBikes API endpoint")
@@ -170,8 +170,10 @@ async def async_setup_platform(
     stations_list = set(config.get(CONF_STATIONS_LIST, []))
     radius = config.get(CONF_RADIUS, 0)
     name = config[CONF_NAME]
-    if not hass.config.units.is_metric:
-        radius = DistanceConverter.convert(radius, LENGTH_FEET, LENGTH_METERS)
+    if hass.config.units is US_CUSTOMARY_SYSTEM:
+        radius = DistanceConverter.convert(
+            radius, UnitOfLength.FEET, UnitOfLength.METERS
+        )
 
     # Create a single instance of CityBikesNetworks.
     networks = hass.data.setdefault(CITYBIKES_NETWORKS, CityBikesNetworks(hass))
@@ -199,9 +201,9 @@ async def async_setup_platform(
 
         if radius > dist or stations_list.intersection((station_id, station_uid)):
             if name:
-                uid = "_".join([network.network_id, name, station_id])
+                uid = f"{network.network_id}_{name}_{station_id}"
             else:
-                uid = "_".join([network.network_id, station_id])
+                uid = f"{network.network_id}_{station_id}"
             entity_id = async_generate_entity_id(ENTITY_ID_FORMAT, uid, hass=hass)
             devices.append(CityBikesStation(network, station_id, entity_id))
 
@@ -226,6 +228,9 @@ class CityBikesNetworks:
                     self.hass, NETWORKS_URI, NETWORKS_RESPONSE_SCHEMA
                 )
                 self.networks = networks[ATTR_NETWORKS_LIST]
+        except CityBikesRequestError as err:
+            raise PlatformNotReady from err
+        else:
             result = None
             minimum_dist = None
             for network in self.networks:
@@ -239,8 +244,6 @@ class CityBikesNetworks:
                     result = network[ATTR_ID]
 
             return result
-        except CityBikesRequestError as err:
-            raise PlatformNotReady from err
         finally:
             self.networks_loading.release()
 

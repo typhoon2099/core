@@ -1,4 +1,5 @@
 """Tests for the Risco alarm control panel device."""
+
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
@@ -24,6 +25,7 @@ from homeassistant.const import (
     STATE_ALARM_TRIGGERED,
     STATE_UNKNOWN,
 )
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.entity_component import async_update_entity
@@ -90,17 +92,22 @@ def two_part_cloud_alarm():
     """Fixture to mock alarm with two partitions."""
     partition_mocks = {0: _partition_mock(), 1: _partition_mock()}
     alarm_mock = MagicMock()
-    with patch.object(
-        partition_mocks[0], "id", new_callable=PropertyMock(return_value=0)
-    ), patch.object(
-        partition_mocks[1], "id", new_callable=PropertyMock(return_value=1)
-    ), patch.object(
-        alarm_mock,
-        "partitions",
-        new_callable=PropertyMock(return_value=partition_mocks),
-    ), patch(
-        "homeassistant.components.risco.RiscoCloud.get_state",
-        return_value=alarm_mock,
+    with (
+        patch.object(
+            partition_mocks[0], "id", new_callable=PropertyMock(return_value=0)
+        ),
+        patch.object(
+            partition_mocks[1], "id", new_callable=PropertyMock(return_value=1)
+        ),
+        patch.object(
+            alarm_mock,
+            "partitions",
+            new_callable=PropertyMock(return_value=partition_mocks),
+        ),
+        patch(
+            "homeassistant.components.risco.RiscoCloud.get_state",
+            return_value=alarm_mock,
+        ),
     ):
         yield partition_mocks
 
@@ -109,46 +116,65 @@ def two_part_cloud_alarm():
 def two_part_local_alarm():
     """Fixture to mock alarm with two partitions."""
     partition_mocks = {0: _partition_mock(), 1: _partition_mock()}
-    with patch.object(
-        partition_mocks[0], "id", new_callable=PropertyMock(return_value=0)
-    ), patch.object(
-        partition_mocks[0], "name", new_callable=PropertyMock(return_value="Name 0")
-    ), patch.object(
-        partition_mocks[1], "id", new_callable=PropertyMock(return_value=1)
-    ), patch.object(
-        partition_mocks[1], "name", new_callable=PropertyMock(return_value="Name 1")
-    ), patch(
-        "homeassistant.components.risco.RiscoLocal.zones",
-        new_callable=PropertyMock(return_value={}),
-    ), patch(
-        "homeassistant.components.risco.RiscoLocal.partitions",
-        new_callable=PropertyMock(return_value=partition_mocks),
+    with (
+        patch.object(
+            partition_mocks[0], "id", new_callable=PropertyMock(return_value=0)
+        ),
+        patch.object(
+            partition_mocks[0], "name", new_callable=PropertyMock(return_value="Name 0")
+        ),
+        patch.object(
+            partition_mocks[1], "id", new_callable=PropertyMock(return_value=1)
+        ),
+        patch.object(
+            partition_mocks[1], "name", new_callable=PropertyMock(return_value="Name 1")
+        ),
+        patch(
+            "homeassistant.components.risco.RiscoLocal.zones",
+            new_callable=PropertyMock(return_value={}),
+        ),
+        patch(
+            "homeassistant.components.risco.RiscoLocal.partitions",
+            new_callable=PropertyMock(return_value=partition_mocks),
+        ),
     ):
         yield partition_mocks
 
 
 @pytest.mark.parametrize("exception", [CannotConnectError, UnauthorizedError])
-async def test_error_on_login(hass, login_with_error, cloud_config_entry):
+async def test_error_on_login(
+    hass: HomeAssistant,
+    entity_registry: er.EntityRegistry,
+    login_with_error,
+    cloud_config_entry,
+) -> None:
     """Test error on login."""
     await hass.config_entries.async_setup(cloud_config_entry.entry_id)
     await hass.async_block_till_done()
-    registry = er.async_get(hass)
-    assert not registry.async_is_registered(FIRST_CLOUD_ENTITY_ID)
-    assert not registry.async_is_registered(SECOND_CLOUD_ENTITY_ID)
+    assert not entity_registry.async_is_registered(FIRST_CLOUD_ENTITY_ID)
+    assert not entity_registry.async_is_registered(SECOND_CLOUD_ENTITY_ID)
 
 
-async def test_cloud_setup(hass, two_part_cloud_alarm, setup_risco_cloud):
+async def test_cloud_setup(
+    hass: HomeAssistant,
+    device_registry: dr.DeviceRegistry,
+    entity_registry: er.EntityRegistry,
+    two_part_cloud_alarm,
+    setup_risco_cloud,
+) -> None:
     """Test entity setup."""
-    registry = er.async_get(hass)
-    assert registry.async_is_registered(FIRST_CLOUD_ENTITY_ID)
-    assert registry.async_is_registered(SECOND_CLOUD_ENTITY_ID)
+    assert entity_registry.async_is_registered(FIRST_CLOUD_ENTITY_ID)
+    assert entity_registry.async_is_registered(SECOND_CLOUD_ENTITY_ID)
 
-    registry = dr.async_get(hass)
-    device = registry.async_get_device({(DOMAIN, TEST_SITE_UUID + "_0")})
+    device = device_registry.async_get_device(
+        identifiers={(DOMAIN, TEST_SITE_UUID + "_0")}
+    )
     assert device is not None
     assert device.manufacturer == "Risco"
 
-    device = registry.async_get_device({(DOMAIN, TEST_SITE_UUID + "_1")})
+    device = device_registry.async_get_device(
+        identifiers={(DOMAIN, TEST_SITE_UUID + "_1")}
+    )
     assert device is not None
     assert device.manufacturer == "Risco"
 
@@ -164,7 +190,9 @@ async def _check_cloud_state(
 
 
 @pytest.mark.parametrize("options", [CUSTOM_MAPPING_OPTIONS])
-async def test_cloud_states(hass, two_part_cloud_alarm, setup_risco_cloud):
+async def test_cloud_states(
+    hass: HomeAssistant, two_part_cloud_alarm, setup_risco_cloud
+) -> None:
     """Test the various alarm states."""
     assert hass.states.get(FIRST_CLOUD_ENTITY_ID).state == STATE_UNKNOWN
     for partition_id, entity_id in {
@@ -253,10 +281,14 @@ async def _test_cloud_no_service_call(
 
 
 @pytest.mark.parametrize("options", [CUSTOM_MAPPING_OPTIONS])
-async def test_cloud_sets_custom_mapping(hass, two_part_cloud_alarm, setup_risco_cloud):
+async def test_cloud_sets_custom_mapping(
+    hass: HomeAssistant,
+    entity_registry: er.EntityRegistry,
+    two_part_cloud_alarm,
+    setup_risco_cloud,
+) -> None:
     """Test settings the various modes when mapping some states."""
-    registry = er.async_get(hass)
-    entity = registry.async_get(FIRST_CLOUD_ENTITY_ID)
+    entity = entity_registry.async_get(FIRST_CLOUD_ENTITY_ID)
     assert entity.supported_features == EXPECTED_FEATURES
 
     await _test_cloud_service_call(
@@ -287,11 +319,13 @@ async def test_cloud_sets_custom_mapping(hass, two_part_cloud_alarm, setup_risco
 
 @pytest.mark.parametrize("options", [FULL_CUSTOM_MAPPING])
 async def test_cloud_sets_full_custom_mapping(
-    hass, two_part_cloud_alarm, setup_risco_cloud
-):
+    hass: HomeAssistant,
+    entity_registry: er.EntityRegistry,
+    two_part_cloud_alarm,
+    setup_risco_cloud,
+) -> None:
     """Test settings the various modes when mapping all states."""
-    registry = er.async_get(hass)
-    entity = registry.async_get(FIRST_CLOUD_ENTITY_ID)
+    entity = entity_registry.async_get(FIRST_CLOUD_ENTITY_ID)
     assert (
         entity.supported_features
         == EXPECTED_FEATURES | AlarmControlPanelEntityFeature.ARM_CUSTOM_BYPASS
@@ -343,8 +377,8 @@ async def test_cloud_sets_full_custom_mapping(
     "options", [{**CUSTOM_MAPPING_OPTIONS, **CODES_REQUIRED_OPTIONS}]
 )
 async def test_cloud_sets_with_correct_code(
-    hass, two_part_cloud_alarm, setup_risco_cloud
-):
+    hass: HomeAssistant, two_part_cloud_alarm, setup_risco_cloud
+) -> None:
     """Test settings the various modes when code is required."""
     code = {"code": 1234}
     await _test_cloud_service_call(
@@ -407,8 +441,8 @@ async def test_cloud_sets_with_correct_code(
     "options", [{**CUSTOM_MAPPING_OPTIONS, **CODES_REQUIRED_OPTIONS}]
 )
 async def test_cloud_sets_with_incorrect_code(
-    hass, two_part_cloud_alarm, setup_risco_cloud
-):
+    hass: HomeAssistant, two_part_cloud_alarm, setup_risco_cloud
+) -> None:
     """Test settings the various modes when code is required and incorrect."""
     code = {"code": 4321}
     await _test_cloud_no_service_call(
@@ -456,27 +490,39 @@ async def test_cloud_sets_with_incorrect_code(
 
 
 @pytest.mark.parametrize("exception", [CannotConnectError, UnauthorizedError])
-async def test_error_on_connect(hass, connect_with_error, local_config_entry):
+async def test_error_on_connect(
+    hass: HomeAssistant,
+    entity_registry: er.EntityRegistry,
+    connect_with_error,
+    local_config_entry,
+) -> None:
     """Test error on connect."""
     await hass.config_entries.async_setup(local_config_entry.entry_id)
     await hass.async_block_till_done()
-    registry = er.async_get(hass)
-    assert not registry.async_is_registered(FIRST_LOCAL_ENTITY_ID)
-    assert not registry.async_is_registered(SECOND_LOCAL_ENTITY_ID)
+    assert not entity_registry.async_is_registered(FIRST_LOCAL_ENTITY_ID)
+    assert not entity_registry.async_is_registered(SECOND_LOCAL_ENTITY_ID)
 
 
-async def test_local_setup(hass, two_part_local_alarm, setup_risco_local):
+async def test_local_setup(
+    hass: HomeAssistant,
+    device_registry: dr.DeviceRegistry,
+    entity_registry: er.EntityRegistry,
+    two_part_local_alarm,
+    setup_risco_local,
+) -> None:
     """Test entity setup."""
-    registry = er.async_get(hass)
-    assert registry.async_is_registered(FIRST_LOCAL_ENTITY_ID)
-    assert registry.async_is_registered(SECOND_LOCAL_ENTITY_ID)
+    assert entity_registry.async_is_registered(FIRST_LOCAL_ENTITY_ID)
+    assert entity_registry.async_is_registered(SECOND_LOCAL_ENTITY_ID)
 
-    registry = dr.async_get(hass)
-    device = registry.async_get_device({(DOMAIN, TEST_SITE_UUID + "_0_local")})
+    device = device_registry.async_get_device(
+        identifiers={(DOMAIN, TEST_SITE_UUID + "_0_local")}
+    )
     assert device is not None
     assert device.manufacturer == "Risco"
 
-    device = registry.async_get_device({(DOMAIN, TEST_SITE_UUID + "_1_local")})
+    device = device_registry.async_get_device(
+        identifiers={(DOMAIN, TEST_SITE_UUID + "_1_local")}
+    )
     assert device is not None
     assert device.manufacturer == "Risco"
     with patch("homeassistant.components.risco.RiscoLocal.disconnect") as mock_close:
@@ -494,7 +540,8 @@ async def _check_local_state(
 
 
 @pytest.fixture
-def _mock_partition_handler():
+def mock_partition_handler():
+    """Create a mock for add_partition_handler."""
     with patch(
         "homeassistant.components.risco.RiscoLocal.add_partition_handler"
     ) as mock:
@@ -503,10 +550,13 @@ def _mock_partition_handler():
 
 @pytest.mark.parametrize("options", [CUSTOM_MAPPING_OPTIONS])
 async def test_local_states(
-    hass, two_part_local_alarm, _mock_partition_handler, setup_risco_local
-):
+    hass: HomeAssistant,
+    two_part_local_alarm,
+    mock_partition_handler,
+    setup_risco_local,
+) -> None:
     """Test the various alarm states."""
-    callback = _mock_partition_handler.call_args.args[0]
+    callback = mock_partition_handler.call_args.args[0]
 
     assert callback is not None
 
@@ -595,10 +645,14 @@ async def _test_local_no_service_call(
 
 
 @pytest.mark.parametrize("options", [CUSTOM_MAPPING_OPTIONS])
-async def test_local_sets_custom_mapping(hass, two_part_local_alarm, setup_risco_local):
+async def test_local_sets_custom_mapping(
+    hass: HomeAssistant,
+    entity_registry: er.EntityRegistry,
+    two_part_local_alarm,
+    setup_risco_local,
+) -> None:
     """Test settings the various modes when mapping some states."""
-    registry = er.async_get(hass)
-    entity = registry.async_get(FIRST_LOCAL_ENTITY_ID)
+    entity = entity_registry.async_get(FIRST_LOCAL_ENTITY_ID)
     assert entity.supported_features == EXPECTED_FEATURES
 
     await _test_local_service_call(
@@ -663,11 +717,13 @@ async def test_local_sets_custom_mapping(hass, two_part_local_alarm, setup_risco
 
 @pytest.mark.parametrize("options", [FULL_CUSTOM_MAPPING])
 async def test_local_sets_full_custom_mapping(
-    hass, two_part_local_alarm, setup_risco_local
-):
+    hass: HomeAssistant,
+    entity_registry: er.EntityRegistry,
+    two_part_local_alarm,
+    setup_risco_local,
+) -> None:
     """Test settings the various modes when mapping all states."""
-    registry = er.async_get(hass)
-    entity = registry.async_get(FIRST_LOCAL_ENTITY_ID)
+    entity = entity_registry.async_get(FIRST_LOCAL_ENTITY_ID)
     assert (
         entity.supported_features
         == EXPECTED_FEATURES | AlarmControlPanelEntityFeature.ARM_CUSTOM_BYPASS
@@ -753,8 +809,8 @@ async def test_local_sets_full_custom_mapping(
     "options", [{**CUSTOM_MAPPING_OPTIONS, **CODES_REQUIRED_OPTIONS}]
 )
 async def test_local_sets_with_correct_code(
-    hass, two_part_local_alarm, setup_risco_local
-):
+    hass: HomeAssistant, two_part_local_alarm, setup_risco_local
+) -> None:
     """Test settings the various modes when code is required."""
     code = {"code": 1234}
     await _test_local_service_call(
@@ -847,8 +903,8 @@ async def test_local_sets_with_correct_code(
     "options", [{**CUSTOM_MAPPING_OPTIONS, **CODES_REQUIRED_OPTIONS}]
 )
 async def test_local_sets_with_incorrect_code(
-    hass, two_part_local_alarm, setup_risco_local
-):
+    hass: HomeAssistant, two_part_local_alarm, setup_risco_local
+) -> None:
     """Test settings the various modes when code is required and incorrect."""
     code = {"code": 4321}
     await _test_local_no_service_call(

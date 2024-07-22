@@ -1,4 +1,5 @@
 """Support for Rflink lights."""
+
 from __future__ import annotations
 
 import logging
@@ -9,7 +10,7 @@ import voluptuous as vol
 
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
-    PLATFORM_SCHEMA,
+    PLATFORM_SCHEMA as LIGHT_PLATFORM_SCHEMA,
     ColorMode,
     LightEntity,
 )
@@ -45,7 +46,7 @@ TYPE_SWITCHABLE = "switchable"
 TYPE_HYBRID = "hybrid"
 TYPE_TOGGLE = "toggle"
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+PLATFORM_SCHEMA = LIGHT_PLATFORM_SCHEMA.extend(
     {
         vol.Optional(
             CONF_DEVICE_DEFAULTS, default=DEVICE_DEFAULTS_SCHEMA({})
@@ -135,9 +136,11 @@ def devices_from_config(domain_config):
         repetitions_enabled = device_config[CONF_SIGNAL_REPETITIONS] != 1
         if is_hybrid and repetitions_enabled:
             _LOGGER.warning(
-                "Hybrid type for %s not compatible with signal "
-                "repetitions. Please set 'dimmable' or 'switchable' "
-                "type explicitly in configuration",
+                (
+                    "Hybrid type for %s not compatible with signal "
+                    "repetitions. Please set 'dimmable' or 'switchable' "
+                    "type explicitly in configuration"
+                ),
                 device_id,
             )
 
